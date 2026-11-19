@@ -1,0 +1,16 @@
+# Secrets — never commit real values; see backend/.env.example
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# OS / editors
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.iml
+
+# Local Claude settings
+.claude/settings.local.json
