@@ -10,6 +10,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import org.hibernate.exception.ConstraintViolationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.beans.TypeMismatchException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpHeaders;
@@ -31,6 +32,8 @@ import org.springframework.web.method.annotation.HandlerMethodValidationExceptio
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
+
+import com.sm.spendly.common.logging.RequestIdFilter;
 
 /**
  * Turns every exception that escapes a controller into an RFC 9457 Problem Details body
@@ -202,6 +205,12 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 		pd.setTitle(code.title());
 		pd.setInstance(URI.create(path));
 		pd.setProperty("code", code.name());
+		// Same id as the X-Request-Id header and the log lines, so a user can quote it
+		// from an error screen and we can find the whole request in the logs.
+		String requestId = MDC.get(RequestIdFilter.MDC_KEY);
+		if (requestId != null) {
+			pd.setProperty("requestId", requestId);
+		}
 		return pd;
 	}
 
