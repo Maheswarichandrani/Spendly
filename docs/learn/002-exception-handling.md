@@ -1,132 +1,235 @@
-# 002 — How Spring MVC turns an exception into a response
+# 002 — Handling errors in one place
 
-Prompt: [`prompts/002-error-handling.md`](../../prompts/002-error-handling.md) · Builds on [001](001-how-spring-boot-boots.md) (DispatcherServlet, auto-configuration)
+Prompt: [`prompts/002-error-handling.md`](../../prompts/002-error-handling.md) · Before this, read [001](001-how-spring-boot-boots.md)
+
+> **In short:** when anything goes wrong in any controller, one class (`GlobalExceptionHandler`) catches the error and sends back the **same, safe JSON shape** with a short **code** the mobile app can understand.
 
 ---
 
-## 1. The concept
+## 1. The idea (what and why)
 
-Errors are part of the API contract. The mobile app must be able to tell "this email is taken" from "your session expired" from "the server crashed" **without parsing English text**. We need two things:
+### The problem
 
-- **One format.** RFC 9457 *Problem Details* is a standard JSON shape (`type`, `title`, `status`, `detail`, `instance`) with the media type `application/problem+json`. We add one field: `code`, a stable string the app can `switch` on.
-- **One place that produces it.** Without that place, every controller would wrap its code in `try/catch` and build error JSON by hand, and each one would do it slightly differently.
+Imagine the mobile app sends a request and something goes wrong. Maybe:
+- the user forgot to type a name,
+- the account doesn't exist,
+- or our code has a bug.
 
-Spring gives us that one place: a `@RestControllerAdvice` class whose `@ExceptionHandler` methods catch whatever escapes *any* controller.
+The app needs to know **what** went wrong so it can show the right message.
 
-## 2. How Spring does it under the hood
+Without a plan:
+- every controller would build error replies its own way (messy),
+- the app would have to read English text like "Account not found" to guess what happened. That breaks as soon as we change the wording.
+- worse, a crash might send back secret details like SQL queries or a Java stack trace.
 
-### The DispatcherServlet's exception path
+### The solution, in two parts
 
-In 001 you saw that every request goes through `DispatcherServlet`. When the controller (or argument binding before it, or JSON writing after it) throws, `DispatcherServlet.processHandlerException` asks a list of **`HandlerExceptionResolver`s**, in order, "can you handle this?":
+**Part 1: one shape for every error.** There's an official standard for this called **Problem Details** (RFC 9457). Every error looks like this:
 
+```json
+{
+  "title": "Not found",
+  "status": 404,
+  "detail": "Account not found.",
+  "instance": "/api/v1/accounts/123",
+  "code": "NOT_FOUND"
+}
 ```
-exception thrown
- │
- ├─ 1. ExceptionHandlerExceptionResolver
- │      Looks for an @ExceptionHandler method: first in the controller class itself,
- │      then in every @ControllerAdvice / @RestControllerAdvice bean.
- │      ← our GlobalExceptionHandler is found here
- ├─ 2. ResponseStatusExceptionResolver   (@ResponseStatus on exception classes)
- └─ 3. DefaultHandlerExceptionResolver   (Spring's built-in fallback for its own exceptions,
-                                           empty body + status code)
- │
- none handled it → exception propagates to Tomcat → Boot's /error page (BasicErrorController)
-```
 
-Because our advice extends `ResponseEntityExceptionHandler`, which has `@ExceptionHandler` methods for **all** of Spring MVC's standard exceptions, resolver 1 catches everything. Resolvers 2 and 3 never get a turn.
+| Field | Meaning |
+|---|---|
+| `title` | Short name of the error type |
+| `status` | The HTTP status number (404, 400, 500…) |
+| `detail` | A human sentence, written by us, safe to show |
+| `instance` | Which URL had the problem |
+| `code` | **Our addition.** A fixed word the app checks in code, e.g. `if (code == "NOT_FOUND")` |
 
-### Which `@ExceptionHandler` wins
+**Part 2: one place that builds it.** Instead of every controller handling its own errors, all errors "fall through" to **one class** that builds the reply.
 
-Spring picks the handler whose declared exception type is **closest** in the class hierarchy to the thrown exception:
+**Real-life comparison:** a hospital reception desk.
+- Doctors (controllers) don't talk to the outside world when something goes wrong. They just say "problem!" (throw an exception).
+- The reception desk (`GlobalExceptionHandler`) gives the family a calm, standard message.
+- The private medical details (the stack trace) stay inside the hospital, in the log file.
 
-- `NotFoundException` → `ApiException` is 1 step up, `Exception` is 3 steps up, so `handleApiException` wins.
-- `IllegalStateException` → only `Exception` matches, so `handleUnexpected` runs.
+---
 
-That's why a catch-all `Exception.class` handler is safe. It only receives what nothing more specific claims.
+## 2. How it works inside
 
-### `ResponseEntityExceptionHandler`: a template method
+### What is an exception?
 
-The parent class has one method per framework exception (`handleMethodArgumentNotValid`, `handleHttpRequestMethodNotSupported`, `handleNoResourceFoundException`, …). Each one builds a `ProblemDetail`, then **all of them** call one protected hook:
+An **exception** is Java's way of saying "stop, something went wrong". When code runs `throw new NotFoundException("Account not found.")`:
+1. the current method stops immediately,
+2. Java goes back up the chain of calls looking for someone who will **catch** it.
+
+### How the error reaches our handler
+
+1. A controller method throws an exception.
+2. Nobody inside the controller catches it, so it goes up to **DispatcherServlet** (Spring's front desk from note 001).
+3. The front desk asks: "Does anyone handle this kind of error?"
+4. It finds our class, because it's marked `@RestControllerAdvice`. That annotation means "this class handles errors for **all** controllers".
+5. Inside our class, it looks for a method marked `@ExceptionHandler` for that exception type.
+6. That method builds the Problem Details JSON and sends it back.
+
+### Which handler method is chosen?
+
+Our class has several handler methods:
 
 ```java
-protected ResponseEntity<Object> handleExceptionInternal(Exception ex, Object body,
-        HttpHeaders headers, HttpStatusCode statusCode, WebRequest request)
+@ExceptionHandler(ApiException.class)                    // our own errors
+@ExceptionHandler(DataIntegrityViolationException.class) // database duplicate errors
+@ExceptionHandler(Exception.class)                       // everything else (catch-all)
 ```
 
-This is the *template method* pattern. We override only that single hook in `GlobalExceptionHandler`, and every framework error automatically gets our `code`, our safe `detail`, `instance`, and validation `errors`. We didn't have to override a dozen methods.
+Rule: **Spring picks the most specific match.**
 
-### How `ProblemDetail` becomes JSON
+- `NotFoundException` is a kind of `ApiException`, which is a kind of `Exception`.
+- Both `ApiException` and `Exception` match, but `ApiException` is **closer**, so its handler wins.
+- An `IllegalStateException` (a bug) only matches `Exception`, so it goes to the catch-all.
 
-`ProblemDetail` is a plain Spring class with getters plus a `Map<String, Object> properties`. Spring registers a Jackson 3 *mixin* for it that:
-- writes `properties` entries (`code`, `errors`) as **top-level** fields, not nested under `"properties"`;
-- **omits `type` when it is `about:blank`** (you saw this in the responses). RFC 9457 says an absent `type` means `about:blank`, so this is correct.
+Comparison: a letter addressed to "Ravi, Flat 4B" goes to Ravi, not to "anyone in the building". The catch-all is "anyone in the building": it only gets letters with no better address.
 
-When a handler returns a `ProblemDetail` (or `ResponseEntity<ProblemDetail>`), Spring picks the `application/problem+json` content type automatically.
+### Our own error classes
 
-### Bean Validation at the web boundary
+```java
+public abstract class ApiException extends RuntimeException {
+    private final ErrorCode errorCode;
+    ...
+}
+```
 
-`spring-boot-starter-validation` brings Hibernate Validator. When a parameter is annotated `@Valid @RequestBody ProbeRequest request`:
+- `ApiException` is the parent of all errors **we** throw on purpose.
+- It carries an `ErrorCode` (like `NOT_FOUND`) and a safe message.
+- `extends RuntimeException` makes it an *unchecked* exception, so Java doesn't force every method to declare `throws ...`. (It also matters for database transactions later, in step 004.)
 
-1. Jackson reads the JSON into the record. If the JSON is broken, you get `HttpMessageNotReadableException` → `MALFORMED_REQUEST`.
-2. The validator checks the record's constraints (`@NotBlank`, `@Positive`).
-3. If any fail, the controller method is **never called**. `MethodArgumentNotValidException` is thrown with a `BindingResult` that holds every failure, and that becomes `VALIDATION_FAILED` with the `errors` list.
+The children:
 
-Constraints directly on `@PathVariable` or `@RequestParam` parameters (for example `@RequestParam @Max(100) int size`) fail with `HandlerMethodValidationException` instead. We map both to the same code.
-
-### Why the Actuator 405 also came back as Problem Details
-
-Actuator's HTTP endpoints are registered through a special `HandlerMapping` inside the same `DispatcherServlet`. A `DELETE` on `/actuator/health` is rejected by the dispatcher with `HttpRequestMethodNotSupportedException`, which goes down the same resolver path as above, so our advice formats it too.
-
-### Why unknown routes work without extra config
-
-Since Framework 6.1, a request that matches no controller falls through to the static-resource handler. When that handler finds no file, it throws `NoResourceFoundException`, which our advice maps to `NOT_FOUND`. Older guides tell you to set `spring.mvc.throw-exception-if-no-handler-found`. With Boot 4 that isn't needed.
-
-## 3. The request walk-through
-
-`POST /test/errors/validate` with `{ "name": "", "amount": -5 }`. In the tests this runs through `MockMvc`, which drives a real `DispatcherServlet` without opening a network socket.
-
-1. **`DispatcherServlet`** finds the handler `ErrorProbeController.validate` through `RequestMappingHandlerMapping`.
-2. **`RequestResponseBodyMethodProcessor`** (the argument resolver for `@RequestBody`) uses Jackson 3 to build `ProbeRequest("", -5)`.
-3. Because of `@Valid`, it runs **Hibernate Validator**, which reports two violations. It throws `MethodArgumentNotValidException`. The controller method never runs.
-4. `DispatcherServlet` asks **`ExceptionHandlerExceptionResolver`**, which finds `ResponseEntityExceptionHandler.handleMethodArgumentNotValid` (inherited by `GlobalExceptionHandler`).
-5. That method calls our **`handleExceptionInternal`**:
-   - `codeFor` → `VALIDATION_FAILED`
-   - `validationErrors` → `[amount: must be greater than 0, name: must not be blank]`, sorted by field
-   - builds the `ProblemDetail` with `code`, `instance`, `errors`; logs at DEBUG
-6. Jackson serializes it as `application/problem+json` with status 400.
-
-No database is involved. This is the web layer only, which is exactly what `@WebMvcTest` loads.
-
-## 4. Why this design
-
-| Choice | Rejected alternative | Why |
+| Class | Status | When to use |
 |---|---|---|
-| One `@RestControllerAdvice` | `try/catch` in controllers | Duplicated, inconsistent, and easy to forget. Controllers stay thin (AGENTS §5). |
-| Extend `ResponseEntityExceptionHandler` | `spring.mvc.problemdetails.enabled=true` only | The property gives Problem Details for framework errors but no `code` field and no control over `detail`. Extending gives both. Boot's built-in advice backs off automatically when we define our own (`@ConditionalOnMissingBean`, from 001). |
-| Stable `code` enum | Clients parse `title` or `detail` | Text changes (wording, translation) and would break the app. Codes don't change. |
-| Our own `detail` text for framework errors | Spring's default detail | Spring's text can echo input, e.g. `Failed to convert value 'abc'…`. Echoing input can leak data, and it's how attackers probe. |
-| Few exception classes plus many codes | One class per error (`EmailTakenException`, …) | Classes only matter when *behaviour* differs (status family). Codes are cheap. |
-| Unchecked `ApiException` | Checked exceptions | `@Transactional` rolls back on unchecked exceptions by default (004). Checked exceptions would add `throws` to every layer. |
-| `@WebMvcTest` for handler tests | `@SpringBootTest` | The full context needs Docker and takes about 25 s. The slice starts in about 3 s and tests only what we're testing. |
+| `NotFoundException` | 404 | The thing doesn't exist, **or it belongs to another user** (so nobody can tell whether an id exists) |
+| `ConflictException` | 409 | Clashes with existing data, e.g. "this email is already registered" |
+| `BusinessRuleException` | 422 | Input is fine, but a rule says no, e.g. "credit limit exceeded" |
 
-## 5. Common mistakes
+The codes live in one list, the enum `ErrorCode`:
 
-- **Catch-all returning `ex.getMessage()`.** One NullPointerException or SQL error later, you're leaking internals. Our `boom` and `integrity` probe tests exist to prevent this.
-- **Echoing `rejectedValue` in validation errors.** That field could be a password.
-- **Two advice classes both handling `Exception`.** The order is undefined unless you use `@Order`. Keep one advice.
-- **Expecting the advice to catch filter errors.** Exceptions thrown in a servlet filter, such as Spring Security's 401 and 403, happen *before* `DispatcherServlet` and never reach `@RestControllerAdvice`. 004 handles those separately.
-- **Logging every 4xx at WARN or ERROR.** Clients send bad input all the time, so the real errors drown. Use DEBUG for client errors and ERROR for our bugs.
-- **Annotating the advice with `@ControllerAdvice` (not `Rest…`)** and returning objects. Without `@ResponseBody` semantics, Spring tries to render a view.
+```java
+NOT_FOUND(HttpStatus.NOT_FOUND, "Not found"),
+```
 
-## 6. Try it
+This reads as: "the code `NOT_FOUND` means HTTP status 404, and its title is 'Not found'".
 
-1. **Watch the resolver choice:**
-   - Temporarily add `logging.level.org.springframework.web=DEBUG` to `application-dev.properties`, run the app, and call `curl -i localhost:8080/api/v1/nope`.
-   - Find the log line naming `ExceptionHandlerExceptionResolver` and the handler method it chose. Remove the setting afterwards.
-2. **Prove the "closest match" rule:**
-   - Add a temporary `@ExceptionHandler(NotFoundException.class)` method that returns status 418.
-   - Run `notFoundException_returns404ProblemWithCode`. It fails, because the more specific handler won. Remove the method.
-3. **Without the parent class:**
-   - Temporarily remove `extends ResponseEntityExceptionHandler` (and the `@Override` method), then run the malformed-JSON test.
-   - What status and body come back, and which resolver from section 2 produced them? Restore the code.
-4. **Write the 9 tests** listed in the prompt. When they pass, send me the file to review.
+**Rule:** once the app uses a code, we **never rename it**, or the app would break.
+
+### Errors made by Spring itself
+
+Some errors happen **before** our controller code even runs, for example:
+- the JSON sent is broken (`{"name":`),
+- the URL doesn't exist,
+- the wrong HTTP method is used (DELETE instead of GET).
+
+Spring has its own class for these, `ResponseEntityExceptionHandler`. It already knows how to handle about 15 kinds of Spring errors.
+
+So our class **extends** it (inherits all of that). Then we change just **one** method, `handleExceptionInternal`. Every one of those 15 handlers passes through this method at the end, so changing it once adds our `code`, our safe `detail`, and `instance` to all of them.
+
+Comparison: 15 different forms all go through the same stamping machine at the end. We changed the stamp once instead of rewriting 15 forms.
+
+### Validation errors (missing or wrong fields)
+
+In the test controller:
+
+```java
+record ProbeRequest(@NotBlank String name, @Positive BigDecimal amount) {}
+
+@PostMapping("/validate")
+ProbeRequest validate(@Valid @RequestBody ProbeRequest request) { ... }
+```
+
+- `@NotBlank`: "name must not be empty".
+- `@Positive`: "amount must be more than 0".
+- `@RequestBody`: "read this object from the JSON body".
+- `@Valid`: "check the rules **before** running the method".
+
+If a rule fails:
+1. the method **never runs**,
+2. Spring throws `MethodArgumentNotValidException`,
+3. our handler turns it into a reply with a list of the bad fields:
+
+```json
+"errors": [
+  { "field": "amount", "message": "must be greater than 0" },
+  { "field": "name",   "message": "must not be blank" }
+]
+```
+
+We **never** send back what the user typed (the "rejected value"), because it could be a password.
+
+### Why the JSON has no `"type"` field
+
+The standard says a missing `type` means `"about:blank"` ("no special type page"). Spring leaves it out to keep replies short. That's normal.
+
+---
+
+## 3. Following one request
+
+The request: `POST /test/errors/validate` with `{ "name": "", "amount": -5 }`.
+
+1. **DispatcherServlet** (the front desk) finds the method `validate` in `ErrorProbeController`.
+2. **Jackson** (the JSON library) turns the text into a Java object: `ProbeRequest(name="", amount=-5)`.
+3. Because of `@Valid`, the **validator** checks the rules. Two rules fail.
+4. Spring throws `MethodArgumentNotValidException`. The `validate` method is never called.
+5. The front desk finds our `GlobalExceptionHandler`. The inherited method for this error runs, then passes through our `handleExceptionInternal`, which:
+   - picks the code `VALIDATION_FAILED`,
+   - builds the list of 2 field errors, sorted by field name,
+   - writes the detail "2 fields are invalid.",
+   - logs a quiet DEBUG line (not an alarm, since it's the user's mistake).
+6. Jackson turns the result into JSON with status **400** and content type `application/problem+json`.
+
+No database is touched. All of this happens in the web layer.
+
+---
+
+## 4. Why we chose this
+
+- **One handler class instead of `try/catch` in every controller.** Less code, the same shape every time, and nothing forgotten.
+- **A `code` field instead of making the app read `title` or `detail`.** Text can change (new wording, translation). Codes never change.
+- **Our own `detail` text instead of Spring's.** Spring's text can repeat what the user sent, e.g. `Failed to convert value 'abc'`. We never echo input back.
+- **A few exception classes plus many codes instead of one class per error.** A new class is only needed when the **status** differs. Adding a code is one line.
+- **`@WebMvcTest` for these tests instead of `@SpringBootTest`.**
+  - `@WebMvcTest` starts only the web part: no database, no Docker.
+  - It runs in about 3 seconds instead of about 25.
+
+---
+
+## 5. Mistakes to avoid
+
+1. **Sending `ex.getMessage()` in the catch-all.** A database error message can contain SQL and table names. We log it and send "Unexpected error." instead. Our `boom` and `integrity` tests check this.
+2. **Sending back the rejected value.** It could be a password.
+3. **Having two error-handler classes** that both catch `Exception`. Which one runs isn't guaranteed. Keep one.
+4. **Expecting this class to catch login errors.** Security errors (401, 403) happen *before* the front desk, so this class never sees them. Step 004 handles those.
+5. **Logging every user mistake as an ERROR.** Real bugs get lost in the noise. Use DEBUG for user mistakes and ERROR for our bugs.
+
+---
+
+## 6. Try it yourself
+
+1. **See the handler being chosen.**
+   - Add `logging.level.org.springframework.web=DEBUG` to `application-dev.properties`, start the app, and run `curl -i localhost:8080/api/v1/nope`.
+   - In the log, find the line that names our handler method. Remove the setting afterwards.
+2. **Prove "most specific wins".**
+   - Add a temporary method `@ExceptionHandler(NotFoundException.class)` that returns status 418.
+   - Run the test `notFoundException_returns404ProblemWithCode`. It fails, because your new, more specific method won.
+   - Delete the method.
+3. **See life without the parent class.**
+   - Temporarily remove `extends ResponseEntityExceptionHandler` and the `handleExceptionInternal` method.
+   - Run the malformed-JSON test. What comes back now? (Hint: the catch-all gets it, so you'll see a 500 instead of a 400.)
+   - Put the code back.
+
+---
+
+## Remember these
+
+- **Exception** = Java's "stop, something went wrong".
+- **`@RestControllerAdvice`** = one class that catches errors from **all** controllers.
+- **`@ExceptionHandler(X.class)`** = "this method handles X". The **most specific** match wins.
+- Every error reply has the same shape, plus a **`code`** the app checks.
+- We **write `detail` ourselves**, so we never leak SQL, stack traces, or user input.
+- **`@Valid`** checks request fields before the method runs.

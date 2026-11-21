@@ -7,14 +7,21 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
+import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
+
+import com.sm.spendly.common.logging.RequestIdFilter;
 
 /**
  * Web-layer slice: starts only MVC (controllers, advice, Jackson, validation).
@@ -135,6 +142,19 @@ class GlobalExceptionHandlerTest {
 			.andExpect(jsonPath("$.code").value("CONFLICT"))
 			.andExpect(content().string(not(containsString("users_email_key"))))
 			.andExpect(content().string(not(containsString("duplicate key"))));
+	}
+
+	@Test
+	void errorBody_containsSameRequestIdAsHeader() throws Exception {
+		// @WebMvcTest also registers Filter beans, so RequestIdFilter runs here too.
+		MvcResult result = mockMvc.perform(get("/test/errors/not-found"))
+			.andExpect(status().isNotFound())
+			.andExpect(header().exists(RequestIdFilter.HEADER))
+			.andReturn();
+
+		String headerId = result.getResponse().getHeader(RequestIdFilter.HEADER);
+		String bodyId = JsonPath.read(result.getResponse().getContentAsString(), "$.requestId");
+		assertThat(bodyId).isEqualTo(headerId);
 	}
 
 }
