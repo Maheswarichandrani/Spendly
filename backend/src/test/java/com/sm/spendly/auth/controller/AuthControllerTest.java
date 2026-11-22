@@ -1,0 +1,113 @@
+package com.sm.spendly.auth.controller;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.containsInAnyOrder;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+import java.time.DayOfWeek;
+import java.time.Instant;
+import java.util.UUID;
+
+import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.http.MediaType;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.web.servlet.MockMvc;
+
+import com.sm.spendly.auth.dto.RegisterRequest;
+import com.sm.spendly.auth.service.AuthService;
+import com.sm.spendly.common.exception.ConflictException;
+import com.sm.spendly.common.exception.ErrorCode;
+import com.sm.spendly.user.dto.UserResponse;
+import com.sm.spendly.user.entity.ThemePreference;
+
+/**
+ * Web slice: only AuthController, the exception handler, Jackson and validation.
+ * {@code @MockitoBean} puts a Mockito mock of AuthService into the Spring context,
+ * so this tests HTTP behaviour alone (status codes, JSON, validation).
+ */
+@WebMvcTest(AuthController.class)
+class AuthControllerTest {
+
+	private static final String URL = "/api/v1/auth/register";
+
+	@Autowired
+	MockMvc mockMvc;
+
+	@MockitoBean
+	AuthService authService;
+
+	@Test
+	void register_returns201WithUser() throws Exception {
+		UUID id = UUID.randomUUID();
+		when(authService.register(any())).thenReturn(new UserResponse(id, "Ravi Kumar", "ravi@mail.com", false,
+				null, "UTC", DayOfWeek.MONDAY, ThemePreference.SYSTEM, Instant.parse("2026-11-22T10:15:02Z")));
+
+		mockMvc.perform(post(URL).contentType(MediaType.APPLICATION_JSON).content("""
+				{ "name": "Ravi Kumar", "email": "Ravi@Mail.com", "password": "correct-horse-42" }
+				"""))
+			.andExpect(status().isCreated())
+			.andExpect(jsonPath("$.id").value(id.toString()))
+			.andExpect(jsonPath("$.email").value("ravi@mail.com"))
+			.andExpect(jsonPath("$.weekStart").value("MONDAY"))
+			.andExpect(jsonPath("$.createdAt").value("2026-11-22T10:15:02Z"))
+			.andExpect(jsonPath("$.password").doesNotExist())
+			.andExpect(jsonPath("$.passwordHash").doesNotExist());
+	}
+
+	@Test
+	void register_blankFields_returns400WithFieldErrors() throws Exception {
+		mockMvc.perform(post(URL).contentType(MediaType.APPLICATION_JSON).content("""
+				{ "name": "", "email": "nope", "password": "short" }
+				"""))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+			.andExpect(jsonPath("$.errors[*].field").value(containsInAnyOrder("email", "name", "password")));
+	}
+
+	@Test
+	void register_shortPassword_returns400() throws Exception {
+		mockMvc.perform(post(URL).contentType(MediaType.APPLICATION_JSON).content("""
+				{ "name": "Ravi", "email": "ravi@mail.com", "password": "short" }
+				"""))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+			.andExpect(jsonPath("$.errors[0].field").value("password"));
+	}
+
+	@Test
+	void register_duplicate_returns409() throws Exception {
+		when(authService.register(any()))
+			.thenThrow(new ConflictException(ErrorCode.EMAIL_ALREADY_REGISTERED, "An account with this email already exists."));
+
+		mockMvc.perform(post(URL).contentType(MediaType.APPLICATION_JSON).content("""
+				{ "name": "Ravi", "email": "ravi@mail.com", "password": "correct-horse-42" }
+				"""))
+			.andExpect(status().isConflict())
+			.andExpect(jsonPath("$.code").value("EMAIL_ALREADY_REGISTERED"));
+	}
+
+	@Test
+	void register_stripsSpacesBeforeValidation() throws Exception {
+		// " Ravi@Mail.com " would fail @Email if the spaces were still there.
+		mockMvc.perform(post(URL).contentType(MediaType.APPLICATION_JSON).content("""
+				{ "name": " Ravi ", "email": " Ravi@Mail.com ", "password": " correct-horse-42 " }
+				"""))
+			.andExpect(status().isCreated());
+
+		ArgumentCaptor<RegisterRequest> captor = ArgumentCaptor.forClass(RegisterRequest.class);
+		verify(authService).register(captor.capture());
+		assertThat(captor.getValue().name()).isEqualTo("Ravi");
+		assertThat(captor.getValue().email()).isEqualTo("Ravi@Mail.com");
+		// The password is never changed: spaces can be part of it.
+		assertThat(captor.getValue().password()).isEqualTo(" correct-horse-42 ");
+	}
+
+}

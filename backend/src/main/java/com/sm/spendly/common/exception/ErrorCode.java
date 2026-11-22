@@ -23,6 +23,10 @@ public enum ErrorCode {
 	CONFLICT(HttpStatus.CONFLICT, "Conflict"),
 	BUSINESS_RULE_VIOLATION(HttpStatus.UNPROCESSABLE_CONTENT, "Business rule violated"),
 
+	// Registration
+	EMAIL_ALREADY_REGISTERED(HttpStatus.CONFLICT, "Email already registered"),
+	PASSWORD_TOO_LONG(HttpStatus.BAD_REQUEST, "Password too long"),
+
 	// Server side
 	INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "Internal error");
 
