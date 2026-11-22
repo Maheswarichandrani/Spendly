@@ -14,9 +14,11 @@ public interface UserRepository extends JpaRepository<User, UUID> {
 
 	/**
 	 * Derived query: Spring reads the method name and generates
-	 * {@code select count(*) > 0 from users where email = ?}.
+	 * {@code select id from users where email = ? fetch first 1 rows only}
+	 * and returns true if a row came back.
 	 * The caller must pass a lowercased email (the table stores only lowercase).
 	 */
+
 	boolean existsByEmail(String email);
 
 }
