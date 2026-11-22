@@ -23,13 +23,12 @@ class FlywayBaselineTest {
 	Environment environment;
 
 	@Test
-	void baselineMigrationApplied() {
+	void allMigrationsApplied() {
 		List<Map<String, Object>> rows = jdbcTemplate
 			.queryForList("select version, success from flyway_schema_history order by installed_rank");
 
-		assertThat(rows).hasSize(1);
-		assertThat(rows.get(0).get("version")).isEqualTo("1");
-		assertThat(rows.get(0).get("success")).isEqualTo(true);
+		assertThat(rows).extracting(row -> row.get("version")).containsExactly("1", "2");
+		assertThat(rows).allSatisfy(row -> assertThat(row.get("success")).isEqualTo(true));
 	}
 
 	@Test

@@ -7,7 +7,6 @@ import java.util.Optional;
 
 import jakarta.servlet.http.HttpServletRequest;
 
-import org.hibernate.exception.ConstraintViolationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
@@ -34,6 +33,7 @@ import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExcep
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import com.sm.spendly.common.logging.RequestIdFilter;
+import com.sm.spendly.common.persistence.ConstraintNames;
 
 /**
  * Turns every exception that escapes a controller into an RFC 9457 Problem Details body
@@ -75,7 +75,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 	ResponseEntity<ProblemDetail> handleDataIntegrity(DataIntegrityViolationException ex,
 			HttpServletRequest request) {
 		log.warn("Data integrity violation code={} path={} constraint={}", ErrorCode.CONFLICT,
-				request.getRequestURI(), constraintName(ex));
+				request.getRequestURI(), ConstraintNames.of(ex));
 		return toResponse(problem(ErrorCode.CONFLICT, "The request conflicts with existing data.",
 				request.getRequestURI()));
 	}
@@ -220,18 +220,6 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
 	private static String path(WebRequest request) {
 		return request instanceof ServletWebRequest swr ? swr.getRequest().getRequestURI() : "/";
-	}
-
-	/** Only the constraint name is logged; the full message contains SQL and values. */
-	private static String constraintName(DataIntegrityViolationException ex) {
-		Throwable cause = ex;
-		while (cause != null) {
-			if (cause instanceof ConstraintViolationException cve && cve.getConstraintName() != null) {
-				return cve.getConstraintName();
-			}
-			cause = cause.getCause();
-		}
-		return "unknown";
 	}
 
 }
