@@ -30,6 +30,9 @@
 		<java.version>17</java.version>
 		<!-- springdoc 3.x is the Spring Boot 4 line; 3.1.x is built against Boot 4.1 (ours). -->
 		<springdoc.version>3.1.1</springdoc.version>
+		<!-- MapStruct writes entity -> DTO mapping code at compile time (step 010). -->
+		<mapstruct.version>1.6.3</mapstruct.version>
+		<lombok-mapstruct-binding.version>0.2.0</lombok-mapstruct-binding.version>
 	</properties>
 	<dependencies>
 		<dependency>
@@ -69,6 +72,13 @@
 			<groupId>org.springdoc</groupId>
 			<artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
 			<version>${springdoc.version}</version>
+		</dependency>
+
+		<!-- Only the annotations (@Mapper...). The code generator is in annotationProcessorPaths below. -->
+		<dependency>
+			<groupId>org.mapstruct</groupId>
+			<artifactId>mapstruct</artifactId>
+			<version>${mapstruct.version}</version>
 		</dependency>
 
 		<dependency>
@@ -150,10 +160,23 @@
 							<goal>compile</goal>
 						</goals>
 						<configuration>
+							<!-- Code generators that run inside the compiler. Lombok adds getters,
+							     MapStruct then writes mappers that call those getters. The binding
+							     makes sure Lombok runs first. -->
 							<annotationProcessorPaths>
 								<path>
 									<groupId>org.projectlombok</groupId>
 									<artifactId>lombok</artifactId>
+								</path>
+								<path>
+									<groupId>org.mapstruct</groupId>
+									<artifactId>mapstruct-processor</artifactId>
+									<version>${mapstruct.version}</version>
+								</path>
+								<path>
+									<groupId>org.projectlombok</groupId>
+									<artifactId>lombok-mapstruct-binding</artifactId>
+									<version>${lombok-mapstruct-binding.version}</version>
 								</path>
 							</annotationProcessorPaths>
 						</configuration>
@@ -165,10 +188,23 @@
 							<goal>testCompile</goal>
 						</goals>
 						<configuration>
+							<!-- Code generators that run inside the compiler. Lombok adds getters,
+							     MapStruct then writes mappers that call those getters. The binding
+							     makes sure Lombok runs first. -->
 							<annotationProcessorPaths>
 								<path>
 									<groupId>org.projectlombok</groupId>
 									<artifactId>lombok</artifactId>
+								</path>
+								<path>
+									<groupId>org.mapstruct</groupId>
+									<artifactId>mapstruct-processor</artifactId>
+									<version>${mapstruct.version}</version>
+								</path>
+								<path>
+									<groupId>org.projectlombok</groupId>
+									<artifactId>lombok-mapstruct-binding</artifactId>
+									<version>${lombok-mapstruct-binding.version}</version>
 								</path>
 							</annotationProcessorPaths>
 						</configuration>
