@@ -1,5 +1,6 @@
 package com.sm.spendly.common.config;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 import io.swagger.v3.core.converter.ModelConverters;
@@ -10,6 +11,7 @@ import io.swagger.v3.oas.models.info.Info;
 import io.swagger.v3.oas.models.media.Content;
 import io.swagger.v3.oas.models.media.MediaType;
 import io.swagger.v3.oas.models.media.Schema;
+import io.swagger.v3.oas.models.media.StringSchema;
 import io.swagger.v3.oas.models.responses.ApiResponse;
 import io.swagger.v3.oas.models.responses.ApiResponses;
 import io.swagger.v3.oas.models.security.SecurityRequirement;
@@ -17,6 +19,7 @@ import io.swagger.v3.oas.models.security.SecurityScheme;
 import io.swagger.v3.oas.models.servers.Server;
 
 import org.springdoc.core.customizers.OpenApiCustomizer;
+import org.springdoc.core.utils.SpringDocUtils;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -35,6 +38,13 @@ public class OpenApiConfig {
 	public static final String BEARER_AUTH = "bearerAuth";
 
 	static final String PROBLEM_JSON = "application/problem+json";
+
+	// Runs once when the class loads. JacksonConfig writes every BigDecimal as a JSON
+	// string, so the docs must say "string" too, or the app developer would expect a number.
+	static {
+		SpringDocUtils.getConfig().replaceWithSchema(BigDecimal.class,
+				new StringSchema().format("decimal").example("1250.50"));
+	}
 
 	@Bean
 	OpenAPI spendlyOpenApi() {

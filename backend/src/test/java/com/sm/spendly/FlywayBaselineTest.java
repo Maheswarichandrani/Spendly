@@ -27,7 +27,7 @@ class FlywayBaselineTest {
 		List<Map<String, Object>> rows = jdbcTemplate
 			.queryForList("select version, success from flyway_schema_history order by installed_rank");
 
-		assertThat(rows).extracting(row -> row.get("version")).containsExactly("1", "2", "3", "4");
+		assertThat(rows).extracting(row -> row.get("version")).containsExactly("1", "2", "3", "4", "5");
 		assertThat(rows).allSatisfy(row -> assertThat(row.get("success")).isEqualTo(true));
 	}
 

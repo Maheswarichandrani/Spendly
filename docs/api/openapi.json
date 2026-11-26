@@ -18,6 +18,10 @@
     ],
     "tags": [
         {
+            "name": "Accounts",
+            "description": "Where money lives: cash, bank, cards, wallets. Balances and net worth."
+        },
+        {
             "name": "Auth",
             "description": "Register, log in, refresh, log out, change password, delete account."
         },
@@ -27,6 +31,81 @@
         }
     ],
     "paths": {
+        "/api/v1/accounts/order": {
+            "put": {
+                "tags": [
+                    "Accounts"
+                ],
+                "summary": "Reorder accounts",
+                "description": "Send the ids top to bottom. Returns the new active list.",
+                "operationId": "reorder",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ReorderAccountsRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "Active accounts in the new order",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/AccountResponse"
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "`VALIDATION_FAILED`",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiProblem"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "`ACCOUNT_NOT_FOUND`: an id is unknown or not yours",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiProblem"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Missing, invalid or expired access token. code: `UNAUTHENTICATED`.",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiProblem"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Unexpected server error. code: `INTERNAL_ERROR`.",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiProblem"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/users/me/onboarding/complete": {
             "post": {
                 "tags": [
@@ -466,6 +545,288 @@
                 }
             }
         },
+        "/api/v1/accounts": {
+            "get": {
+                "tags": [
+                    "Accounts"
+                ],
+                "summary": "List my accounts",
+                "description": "In display order. Archived ones only if asked.",
+                "operationId": "list",
+                "parameters": [
+                    {
+                        "name": "includeArchived",
+                        "in": "query",
+                        "description": "Also return archived accounts.",
+                        "required": false,
+                        "schema": {
+                            "type": "boolean",
+                            "default": false
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/AccountResponse"
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Missing, invalid or expired access token. code: `UNAUTHENTICATED`.",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiProblem"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Unexpected server error. code: `INTERNAL_ERROR`.",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiProblem"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "tags": [
+                    "Accounts"
+                ],
+                "summary": "Create an account",
+                "description": "Only name and type are required. Goes to the end of the list.",
+                "operationId": "create",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CreateAccountRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AccountResponse"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "`VALIDATION_FAILED`",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiProblem"
+                                }
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "`ACCOUNT_NAME_TAKEN` (names are unique among active accounts, ignoring case)",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiProblem"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "`ACCOUNT_LIMIT_REACHED` or `CREDIT_CARD_FIELDS_ONLY`",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiProblem"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Missing, invalid or expired access token. code: `UNAUTHENTICATED`.",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiProblem"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Unexpected server error. code: `INTERNAL_ERROR`.",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiProblem"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/accounts/{id}/unarchive": {
+            "post": {
+                "tags": [
+                    "Accounts"
+                ],
+                "summary": "Unarchive an account",
+                "operationId": "unarchive",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "The active account",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AccountResponse"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "`ACCOUNT_NOT_FOUND`",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiProblem"
+                                }
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "`ACCOUNT_NAME_TAKEN`: an active account took the name meanwhile",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiProblem"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "`ACCOUNT_LIMIT_REACHED`",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiProblem"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Missing, invalid or expired access token. code: `UNAUTHENTICATED`.",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiProblem"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Unexpected server error. code: `INTERNAL_ERROR`.",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiProblem"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/accounts/{id}/archive": {
+            "post": {
+                "tags": [
+                    "Accounts"
+                ],
+                "summary": "Archive an account",
+                "description": "Hides it and leaves it out of totals. History is kept.",
+                "operationId": "archive",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "The archived account",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AccountResponse"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "`ACCOUNT_NOT_FOUND`",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiProblem"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Missing, invalid or expired access token. code: `UNAUTHENTICATED`.",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiProblem"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Unexpected server error. code: `INTERNAL_ERROR`.",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiProblem"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/users/me": {
             "get": {
                 "tags": [
@@ -576,10 +937,287 @@
                     }
                 }
             }
+        },
+        "/api/v1/accounts/{id}": {
+            "get": {
+                "tags": [
+                    "Accounts"
+                ],
+                "summary": "Get one account",
+                "operationId": "get",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "The account",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AccountResponse"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "`ACCOUNT_NOT_FOUND` (also for another user's account)",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiProblem"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Missing, invalid or expired access token. code: `UNAUTHENTICATED`.",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiProblem"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Unexpected server error. code: `INTERNAL_ERROR`.",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiProblem"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "tags": [
+                    "Accounts"
+                ],
+                "summary": "Delete an account",
+                "description": "Permanent. Once transactions exist (next step), accounts with history can only be archived.",
+                "operationId": "delete",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Deleted"
+                    },
+                    "404": {
+                        "description": "`ACCOUNT_NOT_FOUND`",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiProblem"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Missing, invalid or expired access token. code: `UNAUTHENTICATED`.",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiProblem"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Unexpected server error. code: `INTERNAL_ERROR`.",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiProblem"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "patch": {
+                "tags": [
+                    "Accounts"
+                ],
+                "summary": "Edit an account",
+                "description": "Send only the fields to change. Type can't change.",
+                "operationId": "update_1",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UpdateAccountRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "The updated account",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AccountResponse"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "`VALIDATION_FAILED`",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiProblem"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "`ACCOUNT_NOT_FOUND`",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiProblem"
+                                }
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "`ACCOUNT_NAME_TAKEN`",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiProblem"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "`ACCOUNT_ARCHIVED` or `CREDIT_CARD_FIELDS_ONLY`",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiProblem"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Missing, invalid or expired access token. code: `UNAUTHENTICATED`.",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiProblem"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Unexpected server error. code: `INTERNAL_ERROR`.",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiProblem"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/accounts/summary": {
+            "get": {
+                "tags": [
+                    "Accounts"
+                ],
+                "summary": "Net worth",
+                "description": "Totals over active accounts with includeInTotal = true.",
+                "operationId": "summary",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AccountSummaryResponse"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Missing, invalid or expired access token. code: `UNAUTHENTICATED`.",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiProblem"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Unexpected server error. code: `INTERNAL_ERROR`.",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiProblem"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
     },
     "components": {
         "schemas": {
+            "ReorderAccountsRequest": {
+                "type": "object",
+                "properties": {
+                    "accountIds": {
+                        "type": "array",
+                        "description": "Ids in the new order, first = top of the list.",
+                        "items": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "maxItems": 200,
+                        "minItems": 0
+                    }
+                },
+                "required": [
+                    "accountIds"
+                ]
+            },
             "ApiProblem": {
                 "description": "RFC 9457 Problem Details. Switch on `code`, never on `title` or `detail`.",
                 "properties": {
@@ -632,6 +1270,110 @@
                     },
                     "message": {
                         "type": "string"
+                    }
+                }
+            },
+            "AccountResponse": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "name": {
+                        "type": "string",
+                        "example": "HDFC Savings"
+                    },
+                    "type": {
+                        "type": "string",
+                        "enum": [
+                            "CASH",
+                            "BANK",
+                            "SAVINGS",
+                            "DEBIT_CARD",
+                            "CREDIT_CARD",
+                            "WALLET",
+                            "INVESTMENT",
+                            "OTHER"
+                        ]
+                    },
+                    "icon": {
+                        "type": "string",
+                        "example": "bank"
+                    },
+                    "color": {
+                        "type": "string",
+                        "example": "#2563EB"
+                    },
+                    "openingBalance": {
+                        "type": "string",
+                        "format": "decimal",
+                        "example": "25000.00"
+                    },
+                    "currentBalance": {
+                        "type": "string",
+                        "format": "decimal",
+                        "description": "Negative on a credit card means money owed.",
+                        "example": "23150.50"
+                    },
+                    "liability": {
+                        "type": "boolean",
+                        "description": "true for CREDIT_CARD."
+                    },
+                    "includeInTotal": {
+                        "type": "boolean"
+                    },
+                    "archived": {
+                        "type": "boolean"
+                    },
+                    "sortOrder": {
+                        "type": "integer",
+                        "format": "int32",
+                        "description": "Display position, 0 = top."
+                    },
+                    "creditLimit": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "format": "decimal",
+                        "example": "100000.00"
+                    },
+                    "availableCredit": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "format": "decimal",
+                        "description": "Credit cards with a limit: limit + balance.",
+                        "example": "95000.00"
+                    },
+                    "amountOwed": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "format": "decimal",
+                        "description": "Credit cards: how much is owed (0.00 if nothing). null for other types.",
+                        "example": "5000.00"
+                    },
+                    "statementDay": {
+                        "type": [
+                            "integer",
+                            "null"
+                        ],
+                        "format": "int32"
+                    },
+                    "dueDay": {
+                        "type": [
+                            "integer",
+                            "null"
+                        ],
+                        "format": "int32"
+                    },
+                    "createdAt": {
+                        "type": "string",
+                        "format": "date-time"
                     }
                 }
             },
@@ -852,6 +1594,100 @@
                     "newPassword"
                 ]
             },
+            "CreateAccountRequest": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "example": "HDFC Savings",
+                        "maxLength": 50,
+                        "minLength": 0
+                    },
+                    "type": {
+                        "type": "string",
+                        "description": "Cannot be changed later. CREDIT_CARD is a liability.",
+                        "enum": [
+                            "CASH",
+                            "BANK",
+                            "SAVINGS",
+                            "DEBIT_CARD",
+                            "CREDIT_CARD",
+                            "WALLET",
+                            "INVESTMENT",
+                            "OTHER"
+                        ]
+                    },
+                    "icon": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "description": "Phosphor icon name. Default depends on type.",
+                        "example": "bank",
+                        "pattern": "^[a-z0-9-]{1,50}$"
+                    },
+                    "color": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "description": "Hex color. Default #2563EB.",
+                        "example": "#2563EB",
+                        "pattern": "^#[0-9A-Fa-f]{6}$"
+                    },
+                    "openingBalance": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "format": "decimal",
+                        "description": "Default 0. For a credit card, send the amount owed as a NEGATIVE number (-5000.00).",
+                        "example": "25000.00"
+                    },
+                    "includeInTotal": {
+                        "type": [
+                            "boolean",
+                            "null"
+                        ],
+                        "description": "Count this account in net worth. Default true."
+                    },
+                    "creditLimit": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "format": "decimal",
+                        "description": "Credit cards only.",
+                        "example": "100000.00"
+                    },
+                    "statementDay": {
+                        "type": [
+                            "integer",
+                            "null"
+                        ],
+                        "format": "int32",
+                        "description": "Credit cards only. Day of month the statement is generated.",
+                        "example": 5,
+                        "maximum": 31,
+                        "minimum": 1
+                    },
+                    "dueDay": {
+                        "type": [
+                            "integer",
+                            "null"
+                        ],
+                        "format": "int32",
+                        "description": "Credit cards only. Day of month the bill is due.",
+                        "example": 25,
+                        "maximum": 31,
+                        "minimum": 1
+                    }
+                },
+                "required": [
+                    "name",
+                    "type"
+                ]
+            },
             "UpdateProfileRequest": {
                 "type": "object",
                 "description": "Send only the fields you want to change. Missing or null fields are left unchanged.",
@@ -902,6 +1738,114 @@
                             "LIGHT",
                             "DARK"
                         ]
+                    }
+                }
+            },
+            "UpdateAccountRequest": {
+                "type": "object",
+                "description": "Send only the fields you want to change.",
+                "properties": {
+                    "name": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "example": "HDFC Savings",
+                        "maxLength": 50,
+                        "minLength": 1
+                    },
+                    "icon": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "example": "bank",
+                        "pattern": "^[a-z0-9-]{1,50}$"
+                    },
+                    "color": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "example": "#2563EB",
+                        "pattern": "^#[0-9A-Fa-f]{6}$"
+                    },
+                    "openingBalance": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "format": "decimal",
+                        "description": "Changing it moves the current balance by the same difference.",
+                        "example": "25000.00"
+                    },
+                    "includeInTotal": {
+                        "type": [
+                            "boolean",
+                            "null"
+                        ]
+                    },
+                    "creditLimit": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "format": "decimal",
+                        "example": "100000.00"
+                    },
+                    "statementDay": {
+                        "type": [
+                            "integer",
+                            "null"
+                        ],
+                        "format": "int32",
+                        "maximum": 31,
+                        "minimum": 1
+                    },
+                    "dueDay": {
+                        "type": [
+                            "integer",
+                            "null"
+                        ],
+                        "format": "int32",
+                        "maximum": 31,
+                        "minimum": 1
+                    }
+                }
+            },
+            "AccountSummaryResponse": {
+                "type": "object",
+                "properties": {
+                    "totalAssets": {
+                        "type": "string",
+                        "format": "decimal",
+                        "description": "Sum of all non-credit-card balances.",
+                        "example": "125000.00"
+                    },
+                    "totalLiabilities": {
+                        "type": "string",
+                        "format": "decimal",
+                        "description": "Total owed on credit cards, as a positive number.",
+                        "example": "15000.00"
+                    },
+                    "netWorth": {
+                        "type": "string",
+                        "format": "decimal",
+                        "description": "Assets minus liabilities.",
+                        "example": "110000.00"
+                    },
+                    "accountCount": {
+                        "type": "integer",
+                        "format": "int64",
+                        "example": 4
+                    },
+                    "currency": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "description": "The user's currency, for formatting. null before onboarding.",
+                        "example": "INR"
                     }
                 }
             }
