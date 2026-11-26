@@ -8,7 +8,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.sql.SQLException;
-import java.time.DayOfWeek;
+
 import java.util.Optional;
 import java.util.UUID;
 
@@ -21,10 +21,13 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import com.sm.spendly.user.entity.WeekStart;
+import com.sm.spendly.common.exception.BusinessRuleException;
 import com.sm.spendly.common.exception.ConflictException;
 import com.sm.spendly.common.exception.ErrorCode;
 import com.sm.spendly.common.exception.NotFoundException;
 import com.sm.spendly.user.dto.LoginCredentials;
+import com.sm.spendly.user.dto.UpdateProfileRequest;
 import com.sm.spendly.user.dto.UserResponse;
 import com.sm.spendly.user.entity.ThemePreference;
 import com.sm.spendly.user.entity.User;
@@ -63,7 +66,7 @@ class UserServiceTest {
 		assertThat(response.email()).isEqualTo("ravi@mail.com");
 		assertThat(response.name()).isEqualTo("Ravi Kumar");
 		assertThat(response.timezone()).isEqualTo("UTC");
-		assertThat(response.weekStart()).isEqualTo(DayOfWeek.MONDAY);
+		assertThat(response.weekStart()).isEqualTo(WeekStart.MONDAY);
 		assertThat(response.theme()).isEqualTo(ThemePreference.SYSTEM);
 		assertThat(response.emailVerified()).isFalse();
 		assertThat(response.currency()).isNull();
@@ -145,6 +148,85 @@ class UserServiceTest {
 		when(userRepository.findByEmail("nobody@mail.com")).thenReturn(Optional.empty());
 
 		assertThat(userService.findLoginCredentials("nobody@mail.com")).isEmpty();
+	}
+
+	// ------------------------------------------------------------ updateProfile
+
+	@Test
+	void updateProfile_changesOnlyFieldsThatWereSent_withoutCallingSave() {
+		UUID id = UUID.randomUUID();
+		User user = userWithId("ravi@mail.com", id);
+		when(userRepository.findById(id)).thenReturn(Optional.of(user));
+
+		UserResponse response = userService.updateProfile(id,
+				new UpdateProfileRequest(null, "inr", "Asia/Kolkata", null, ThemePreference.DARK));
+
+		assertThat(response.name()).isEqualTo("Ravi");                 // not sent: unchanged
+		assertThat(response.currency()).isEqualTo("INR");              // uppercased by the record
+		assertThat(response.timezone()).isEqualTo("Asia/Kolkata");
+		assertThat(response.weekStart()).isEqualTo(WeekStart.MONDAY);  // not sent: unchanged
+		assertThat(response.theme()).isEqualTo(ThemePreference.DARK);
+		// Dirty checking writes the UPDATE at commit. The service never calls save.
+		verify(userRepository, never()).save(any());
+	}
+
+	@Test
+	void updateProfile_unknownUser_throwsUserNotFound() {
+		UUID id = UUID.randomUUID();
+		when(userRepository.findById(id)).thenReturn(Optional.empty());
+
+		assertThatThrownBy(() -> userService.updateProfile(id, new UpdateProfileRequest("X", null, null, null, null)))
+			.isInstanceOf(NotFoundException.class);
+	}
+
+	// ------------------------------------------------------- completeOnboarding
+
+	@Test
+	void completeOnboarding_withoutCurrency_throwsCurrencyRequired() {
+		UUID id = UUID.randomUUID();
+		when(userRepository.findById(id)).thenReturn(Optional.of(userWithId("ravi@mail.com", id)));
+
+		assertThatThrownBy(() -> userService.completeOnboarding(id))
+			.isInstanceOf(BusinessRuleException.class)
+			.extracting(ex -> ((BusinessRuleException) ex).getErrorCode())
+			.isEqualTo(ErrorCode.CURRENCY_REQUIRED);
+	}
+
+	@Test
+	void completeOnboarding_withCurrency_marksDone_andKeepsFirstTimeOnSecondCall() {
+		UUID id = UUID.randomUUID();
+		User user = userWithId("ravi@mail.com", id);
+		user.changeCurrency("INR");
+		when(userRepository.findById(id)).thenReturn(Optional.of(user));
+
+		assertThat(userService.completeOnboarding(id).onboardingCompleted()).isTrue();
+		Object first = ReflectionTestUtils.getField(user, "onboardedAt");
+		userService.completeOnboarding(id);
+		assertThat(ReflectionTestUtils.getField(user, "onboardedAt")).isEqualTo(first);
+	}
+
+	// ------------------------------------------------------- password and delete
+
+	@Test
+	void changePasswordHash_setsNewHash() {
+		UUID id = UUID.randomUUID();
+		User user = userWithId("ravi@mail.com", id);
+		when(userRepository.findById(id)).thenReturn(Optional.of(user));
+
+		userService.changePasswordHash(id, "$2a$12$new");
+
+		assertThat(user.getPasswordHash()).isEqualTo("$2a$12$new");
+	}
+
+	@Test
+	void deleteUser_deletesLoadedEntity() {
+		UUID id = UUID.randomUUID();
+		User user = userWithId("ravi@mail.com", id);
+		when(userRepository.findById(id)).thenReturn(Optional.of(user));
+
+		userService.deleteUser(id);
+
+		verify(userRepository).delete(user);
 	}
 
 	private static User userWithId(String email, UUID id) {

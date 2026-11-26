@@ -1,5 +1,9 @@
 package com.sm.spendly.auth.service;
 
+import static org.mockito.Mockito.inOrder;
+import org.mockito.InOrder;
+import com.sm.spendly.auth.dto.DeleteAccountRequest;
+import com.sm.spendly.auth.dto.ChangePasswordRequest;
 import com.sm.spendly.auth.service.RefreshTokenService.RotationResult;
 import com.sm.spendly.auth.service.RefreshTokenService.IssuedRefreshToken;
 import com.sm.spendly.auth.dto.RefreshTokenRequest;
@@ -238,6 +242,90 @@ class AuthServiceTest {
 		UUID id = UUID.randomUUID();
 		authService.logoutEverywhere(id);
 		verify(refreshTokenService).revokeAllForUser(id);
+	}
+
+	// ------------------------------------------------- change password / delete
+
+	@Test
+	void changePassword_wrongCurrent_throws400_andChangesNothing() {
+		UUID id = UUID.randomUUID();
+		when(userService.getLoginCredentials(id)).thenReturn(new LoginCredentials(id, "hash"));
+		when(passwordEncoder.matches("wrong", "hash")).thenReturn(false);
+
+		assertThatThrownBy(() -> authService.changePassword(id, new ChangePasswordRequest("wrong", "battery-staple-77", null)))
+			.isInstanceOf(BadRequestException.class)
+			.extracting(ex -> ((BadRequestException) ex).getErrorCode())
+			.isEqualTo(ErrorCode.CURRENT_PASSWORD_INCORRECT);
+		verify(userService, never()).changePasswordHash(any(), anyString());
+		verifyNoInteractions(refreshTokenService);
+	}
+
+	@Test
+	void changePassword_ok_savesHash_logsOutEverywhere_andStartsNewSession() {
+		UUID id = UUID.randomUUID();
+		when(userService.getLoginCredentials(id)).thenReturn(new LoginCredentials(id, "hash"));
+		when(passwordEncoder.matches("correct-horse-42", "hash")).thenReturn(true);
+		when(passwordEncoder.encode("battery-staple-77")).thenReturn("new-hash");
+		when(refreshTokenService.issueForLogin(id, "Pixel 8"))
+			.thenReturn(new IssuedRefreshToken("fresh", Instant.parse("2026-12-26T08:00:00Z")));
+		when(tokenService.issueAccessToken(id)).thenReturn("jwt");
+		when(tokenService.accessTokenTtl()).thenReturn(Duration.ofMinutes(15));
+
+		TokenResponse response = authService.changePassword(id,
+				new ChangePasswordRequest("correct-horse-42", "battery-staple-77", "Pixel 8"));
+
+		// Order matters: revoke old sessions first, then issue the new one.
+		InOrder order = inOrder(userService, refreshTokenService);
+		order.verify(userService).changePasswordHash(id, "new-hash");
+		order.verify(refreshTokenService).revokeAllForUser(id);
+		order.verify(refreshTokenService).issueForLogin(id, "Pixel 8");
+		assertThat(response.refreshToken()).isEqualTo("fresh");
+	}
+
+	@Test
+	void changePassword_newPasswordOver72Bytes_throwsPasswordTooLong() {
+		UUID id = UUID.randomUUID();
+		when(userService.getLoginCredentials(id)).thenReturn(new LoginCredentials(id, "hash"));
+		when(passwordEncoder.matches("correct-horse-42", "hash")).thenReturn(true);
+		String emojiPassword = "\uD83D\uDE00".repeat(20); // 20 emoji, 80 bytes
+
+		assertThatThrownBy(() -> authService.changePassword(id,
+				new ChangePasswordRequest("correct-horse-42", emojiPassword, null)))
+			.extracting(ex -> ((BadRequestException) ex).getErrorCode())
+			.isEqualTo(ErrorCode.PASSWORD_TOO_LONG);
+		verify(userService, never()).changePasswordHash(any(), anyString());
+	}
+
+	@Test
+	void deleteAccount_wrongPassword_deletesNothing() {
+		UUID id = UUID.randomUUID();
+		when(userService.getLoginCredentials(id)).thenReturn(new LoginCredentials(id, "hash"));
+		when(passwordEncoder.matches("wrong", "hash")).thenReturn(false);
+
+		assertThatThrownBy(() -> authService.deleteAccount(id, new DeleteAccountRequest("wrong")))
+			.isInstanceOf(BadRequestException.class);
+		verify(userService, never()).deleteUser(any());
+	}
+
+	@Test
+	void deleteAccount_userWithoutPassword_isRejected() {
+		UUID id = UUID.randomUUID();
+		when(userService.getLoginCredentials(id)).thenReturn(new LoginCredentials(id, null));
+
+		assertThatThrownBy(() -> authService.deleteAccount(id, new DeleteAccountRequest("anything")))
+			.isInstanceOf(BadRequestException.class);
+		verify(userService, never()).deleteUser(any());
+	}
+
+	@Test
+	void deleteAccount_ok_deletesUser() {
+		UUID id = UUID.randomUUID();
+		when(userService.getLoginCredentials(id)).thenReturn(new LoginCredentials(id, "hash"));
+		when(passwordEncoder.matches("correct-horse-42", "hash")).thenReturn(true);
+
+		authService.deleteAccount(id, new DeleteAccountRequest("correct-horse-42"));
+
+		verify(userService).deleteUser(id);
 	}
 
 }

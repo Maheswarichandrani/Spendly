@@ -22,6 +22,7 @@ public final class UserMapper {
 				user.getTimezone(),
 				user.getWeekStart(),
 				user.getTheme(),
+				user.isOnboardingCompleted(),
 				user.getCreatedAt());
 	}
 

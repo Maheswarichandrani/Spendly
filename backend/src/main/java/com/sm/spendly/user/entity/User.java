@@ -1,6 +1,6 @@
 package com.sm.spendly.user.entity;
 
-import java.time.DayOfWeek;
+import java.time.Instant;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -49,11 +49,15 @@ public class User extends BaseEntity {
 	// changes meaning if the enum's order ever changes.
 	@Enumerated(EnumType.STRING)
 	@Column(name = "week_start", nullable = false)
-	private DayOfWeek weekStart;
+	private WeekStart weekStart;
 
 	@Enumerated(EnumType.STRING)
 	@Column(name = "theme", nullable = false)
 	private ThemePreference theme;
+
+	// Null until the user finishes onboarding (step 008).
+	@Column(name = "onboarded_at")
+	private Instant onboardedAt;
 
 	/** For Hibernate only: it creates the object empty, then fills fields from the row. */
 	protected User() {
@@ -70,8 +74,52 @@ public class User extends BaseEntity {
 		this.emailVerified = false;
 		this.currency = null;
 		this.timezone = "UTC";
-		this.weekStart = DayOfWeek.MONDAY;
+		this.weekStart = WeekStart.MONDAY;
 		this.theme = ThemePreference.SYSTEM;
+	}
+
+	// ---------------------------------------------------------------- changes
+	// No public setters. Each change is a method with a clear name, so the code that
+	// calls it reads like the business rule ("rename", "complete onboarding").
+	//
+	// None of these call save(). Inside a @Transactional service method this object is
+	// "managed": Hibernate remembers how it looked when loaded and, at commit, writes an
+	// UPDATE for whatever changed. That is called dirty checking (see note 008).
+
+	public void rename(String name) {
+		this.name = name;
+	}
+
+	/** Formatting only: amounts are never converted (AGENTS.md section 7). */
+	public void changeCurrency(String currency) {
+		this.currency = currency;
+	}
+
+	public void changeTimezone(String timezone) {
+		this.timezone = timezone;
+	}
+
+	public void changeWeekStart(WeekStart weekStart) {
+		this.weekStart = weekStart;
+	}
+
+	public void changeTheme(ThemePreference theme) {
+		this.theme = theme;
+	}
+
+	public void changePasswordHash(String passwordHash) {
+		this.passwordHash = passwordHash;
+	}
+
+	/** Safe to call twice: the first time is kept. */
+	public void completeOnboarding(Instant now) {
+		if (this.onboardedAt == null) {
+			this.onboardedAt = now;
+		}
+	}
+
+	public boolean isOnboardingCompleted() {
+		return onboardedAt != null;
 	}
 
 }

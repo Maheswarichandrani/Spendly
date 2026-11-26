@@ -16,6 +16,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.sm.spendly.auth.dto.ChangePasswordRequest;
+import com.sm.spendly.auth.dto.DeleteAccountRequest;
 import com.sm.spendly.auth.dto.LoginRequest;
 import com.sm.spendly.auth.dto.RefreshTokenRequest;
 import com.sm.spendly.auth.dto.RegisterRequest;
@@ -28,7 +30,7 @@ import com.sm.spendly.user.dto.UserResponse;
 /** HTTP only: validate the body, call one service method, return a DTO. */
 @RestController
 @RequestMapping("/api/v1/auth")
-@Tag(name = "Auth", description = "Register, log in, refresh tokens, log out. Only logout-all needs an access token.")
+@Tag(name = "Auth", description = "Register, log in, refresh, log out, change password, delete account.")
 public class AuthController {
 
 	private final AuthService authService;
@@ -109,6 +111,31 @@ public class AuthController {
 	@ApiResponse(responseCode = "204", description = "All sessions ended")
 	public void logoutAll() {
 		authService.logoutEverywhere(currentUser.id());
+	}
+
+	@PostMapping("/change-password")
+	@Operation(summary = "Change password",
+			description = "Checks the current password, saves the new one, **logs out every device**, and returns a "
+					+ "fresh token pair for this device. Replace both stored tokens with the ones returned.")
+	@ApiResponse(responseCode = "200", description = "Password changed; new token pair for this device")
+	@ApiResponse(responseCode = "400",
+			description = "`VALIDATION_FAILED`, `PASSWORD_TOO_LONG`, or `CURRENT_PASSWORD_INCORRECT` (shown as 400, "
+					+ "not 401, so the app does not try to refresh)",
+			content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ApiProblem.class)))
+	public TokenResponse changePassword(@Valid @RequestBody ChangePasswordRequest request) {
+		return authService.changePassword(currentUser.id(), request);
+	}
+
+	@PostMapping("/delete-account")
+	@ResponseStatus(HttpStatus.NO_CONTENT)
+	@Operation(summary = "Delete my account",
+			description = "Permanently deletes the account and all its data after checking the password. "
+					+ "Cannot be undone. Clear stored tokens and go to the welcome screen.")
+	@ApiResponse(responseCode = "204", description = "Account deleted")
+	@ApiResponse(responseCode = "400", description = "`VALIDATION_FAILED` or `CURRENT_PASSWORD_INCORRECT`",
+			content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ApiProblem.class)))
+	public void deleteAccount(@Valid @RequestBody DeleteAccountRequest request) {
+		authService.deleteAccount(currentUser.id(), request);
 	}
 
 }

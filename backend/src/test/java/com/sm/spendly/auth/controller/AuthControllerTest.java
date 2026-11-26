@@ -9,7 +9,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import java.time.DayOfWeek;
+
 import java.time.Instant;
 import java.util.UUID;
 
@@ -22,6 +22,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+import com.sm.spendly.user.entity.WeekStart;
 import com.sm.spendly.auth.dto.RegisterRequest;
 import com.sm.spendly.auth.dto.TokenResponse;
 import com.sm.spendly.auth.service.AuthService;
@@ -64,7 +65,7 @@ class AuthControllerTest {
 	void register_returns201WithUser() throws Exception {
 		UUID id = UUID.randomUUID();
 		when(authService.register(any())).thenReturn(new UserResponse(id, "Ravi Kumar", "ravi@mail.com", false,
-				null, "UTC", DayOfWeek.MONDAY, ThemePreference.SYSTEM, Instant.parse("2026-11-22T10:15:02Z")));
+				null, "UTC", WeekStart.MONDAY, ThemePreference.SYSTEM, false, Instant.parse("2026-11-22T10:15:02Z")));
 
 		mockMvc.perform(post(URL).contentType(MediaType.APPLICATION_JSON).content("""
 				{ "name": "Ravi Kumar", "email": "Ravi@Mail.com", "password": "correct-horse-42" }

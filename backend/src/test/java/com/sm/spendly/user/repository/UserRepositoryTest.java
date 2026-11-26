@@ -3,7 +3,7 @@ package com.sm.spendly.user.repository;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import java.time.DayOfWeek;
+
 
 import jakarta.persistence.EntityManager;
 
@@ -15,6 +15,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 
+import com.sm.spendly.user.entity.WeekStart;
 import com.sm.spendly.TestcontainersConfiguration;
 import com.sm.spendly.common.persistence.ConstraintNames;
 import com.sm.spendly.user.entity.ThemePreference;
@@ -60,7 +61,7 @@ class UserRepositoryTest {
 		User loaded = userRepository.findById(saved.getId()).orElseThrow();
 
 		assertThat(loaded.getTimezone()).isEqualTo("UTC");
-		assertThat(loaded.getWeekStart()).isEqualTo(DayOfWeek.MONDAY);
+		assertThat(loaded.getWeekStart()).isEqualTo(WeekStart.MONDAY);
 		assertThat(loaded.getTheme()).isEqualTo(ThemePreference.SYSTEM);
 		assertThat(loaded.isEmailVerified()).isFalse();
 		assertThat(loaded.getCurrency()).isNull();

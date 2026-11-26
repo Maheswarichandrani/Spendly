@@ -1,12 +1,12 @@
 package com.sm.spendly.user.dto;
 
-import java.time.DayOfWeek;
 import java.time.Instant;
 import java.util.UUID;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 
 import com.sm.spendly.user.entity.ThemePreference;
+import com.sm.spendly.user.entity.WeekStart;
 
 /** What the API shows about a user. Has no password field on purpose. */
 public record UserResponse(
@@ -18,7 +18,9 @@ public record UserResponse(
 		String currency,
 		@Schema(description = "IANA timezone. 'Today' and 'this month' are computed in this zone.", example = "Asia/Kolkata")
 		String timezone,
-		@Schema(description = "One of MONDAY, SATURDAY, SUNDAY.", example = "MONDAY") DayOfWeek weekStart,
+		WeekStart weekStart,
 		ThemePreference theme,
+		@Schema(description = "false = show the onboarding screens after login.")
+		boolean onboardingCompleted,
 		@Schema(example = "2026-11-26T08:15:00Z") Instant createdAt) {
 }
