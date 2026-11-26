@@ -10,6 +10,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import com.sm.spendly.auth.dto.ChangePasswordRequest;
+import com.sm.spendly.auth.dto.DeleteAccountRequest;
 import com.sm.spendly.auth.dto.LoginRequest;
 import com.sm.spendly.auth.dto.RefreshTokenRequest;
 import com.sm.spendly.auth.dto.RegisterRequest;
@@ -70,14 +72,7 @@ public class AuthService {
 		// (Turkish turns "I" into a dotless "ı").
 		String email = request.email().toLowerCase(Locale.ROOT);
 
-		// @Size counted characters. Emoji and many Indian scripts take 3-4 bytes each,
-		// so 30 emoji pass @Size but are 120 bytes. Reject instead of silently cutting.
-		if (request.password().getBytes(StandardCharsets.UTF_8).length > BCRYPT_MAX_BYTES) {
-			log.debug("Registration rejected: password exceeds {} bytes", BCRYPT_MAX_BYTES);
-			throw new BadRequestException(ErrorCode.PASSWORD_TOO_LONG,
-					"Password is too long. Use at most 72 bytes; emoji and some letters count as several bytes.");
-		}
-
+		requireBcryptSafeLength(request.password());
 		String passwordHash = passwordEncoder.encode(request.password());
 
 		// A call to another bean goes through its Spring proxy, so @Transactional on
@@ -139,6 +134,56 @@ public class AuthService {
 
 	public void logoutEverywhere(UUID userId) {
 		refreshTokenService.revokeAllForUser(userId);
+	}
+
+	/**
+	 * Changes the password after checking the current one, then logs out every device and
+	 * starts a fresh session for this one. If the password was changed because it leaked,
+	 * whoever had it is now logged out too.
+	 *
+	 * <p>No @Transactional here (BCrypt is slow); each UserService / RefreshTokenService call
+	 * is its own short transaction. If the revoke failed after the hash was saved, the user
+	 * would have a new password but old sessions alive; they can run logout-all. That small
+	 * gap is the price of not holding a DB connection during two BCrypt operations.
+	 */
+	public TokenResponse changePassword(UUID userId, ChangePasswordRequest request) {
+		requireCurrentPassword(userId, request.currentPassword());
+		requireBcryptSafeLength(request.newPassword());
+
+		userService.changePasswordHash(userId, passwordEncoder.encode(request.newPassword()));
+		refreshTokenService.revokeAllForUser(userId);
+		return tokens(userId, refreshTokenService.issueForLogin(userId, request.deviceLabel()));
+	}
+
+	/** Deletes the account and, through ON DELETE CASCADE, everything the user owns. */
+	public void deleteAccount(UUID userId, DeleteAccountRequest request) {
+		requireCurrentPassword(userId, request.password());
+		userService.deleteUser(userId);
+	}
+
+	/**
+	 * Throws CURRENT_PASSWORD_INCORRECT (400, not 401: see ErrorCode) when the password is
+	 * wrong, too long for BCrypt, or the user has no password at all.
+	 */
+	private void requireCurrentPassword(UUID userId, String password) {
+		String storedHash = userService.getLoginCredentials(userId).passwordHash();
+		boolean tooLong = password.getBytes(StandardCharsets.UTF_8).length > BCRYPT_MAX_BYTES;
+		if (storedHash == null || tooLong || !passwordEncoder.matches(password, storedHash)) {
+			log.info("Password confirmation failed userId={}", userId);
+			throw new BadRequestException(ErrorCode.CURRENT_PASSWORD_INCORRECT, "Current password is incorrect.");
+		}
+	}
+
+	/**
+	 * @Size counted characters. Emoji and many Indian scripts take 3-4 bytes each, so 30
+	 * emoji pass @Size but are 120 bytes. Reject instead of letting BCrypt silently cut.
+	 */
+	private static void requireBcryptSafeLength(String password) {
+		if (password.getBytes(StandardCharsets.UTF_8).length > BCRYPT_MAX_BYTES) {
+			log.debug("Password rejected: exceeds {} bytes", BCRYPT_MAX_BYTES);
+			throw new BadRequestException(ErrorCode.PASSWORD_TOO_LONG,
+					"Password is too long. Use at most 72 bytes; emoji and some letters count as several bytes.");
+		}
 	}
 
 	private TokenResponse tokens(UUID userId, IssuedRefreshToken refreshToken) {

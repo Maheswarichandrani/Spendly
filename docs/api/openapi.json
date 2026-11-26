@@ -18,15 +18,67 @@
     ],
     "tags": [
         {
-            "name": "Users",
-            "description": "The logged-in user's profile."
+            "name": "Auth",
+            "description": "Register, log in, refresh, log out, change password, delete account."
         },
         {
-            "name": "Auth",
-            "description": "Register, log in, refresh tokens, log out. Only logout-all needs an access token."
+            "name": "Users",
+            "description": "The logged-in user's profile, preferences and onboarding."
         }
     ],
     "paths": {
+        "/api/v1/users/me/onboarding/complete": {
+            "post": {
+                "tags": [
+                    "Users"
+                ],
+                "summary": "Finish onboarding",
+                "description": "Call after the onboarding screens. Needs a currency to be set first. Safe to call twice.",
+                "operationId": "completeOnboarding",
+                "responses": {
+                    "200": {
+                        "description": "Profile with onboardingCompleted = true",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/UserResponse"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "`CURRENCY_REQUIRED`: PATCH a currency first",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiProblem"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Missing, invalid or expired access token. code: `UNAUTHENTICATED`.",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiProblem"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Unexpected server error. code: `INTERNAL_ERROR`.",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiProblem"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/auth/register": {
             "post": {
                 "tags": [
@@ -297,6 +349,123 @@
                 "security": []
             }
         },
+        "/api/v1/auth/delete-account": {
+            "post": {
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Delete my account",
+                "description": "Permanently deletes the account and all its data after checking the password. Cannot be undone. Clear stored tokens and go to the welcome screen.",
+                "operationId": "deleteAccount",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/DeleteAccountRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "204": {
+                        "description": "Account deleted"
+                    },
+                    "400": {
+                        "description": "`VALIDATION_FAILED` or `CURRENT_PASSWORD_INCORRECT`",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiProblem"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Missing, invalid or expired access token. code: `UNAUTHENTICATED`.",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiProblem"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Unexpected server error. code: `INTERNAL_ERROR`.",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiProblem"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/auth/change-password": {
+            "post": {
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Change password",
+                "description": "Checks the current password, saves the new one, **logs out every device**, and returns a fresh token pair for this device. Replace both stored tokens with the ones returned.",
+                "operationId": "changePassword",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ChangePasswordRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "Password changed; new token pair for this device",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TokenResponse"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "`VALIDATION_FAILED`, `PASSWORD_TOO_LONG`, or `CURRENT_PASSWORD_INCORRECT` (shown as 400, not 401, so the app does not try to refresh)",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiProblem"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Missing, invalid or expired access token. code: `UNAUTHENTICATED`.",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiProblem"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Unexpected server error. code: `INTERNAL_ERROR`.",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiProblem"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/users/me": {
             "get": {
                 "tags": [
@@ -346,43 +515,71 @@
                         }
                     }
                 }
+            },
+            "patch": {
+                "tags": [
+                    "Users"
+                ],
+                "summary": "Update my profile and preferences",
+                "description": "Send only the fields to change. Used by onboarding (currency, timezone, week start) and by settings. Changing currency changes formatting only; amounts are never converted.",
+                "operationId": "update",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UpdateProfileRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "The updated profile",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/UserResponse"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "`VALIDATION_FAILED` (bad currency, timezone, name) or `MALFORMED_REQUEST` (unknown weekStart/theme value)",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiProblem"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Missing, invalid or expired access token. code: `UNAUTHENTICATED`.",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiProblem"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Unexpected server error. code: `INTERNAL_ERROR`.",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiProblem"
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
     },
     "components": {
         "schemas": {
-            "RegisterRequest": {
-                "type": "object",
-                "properties": {
-                    "name": {
-                        "type": "string",
-                        "example": "Ravi Kumar",
-                        "maxLength": 100,
-                        "minLength": 0
-                    },
-                    "email": {
-                        "type": "string",
-                        "format": "email",
-                        "description": "Stored lowercase. Must be unique.",
-                        "example": "ravi@mail.com",
-                        "maxLength": 254,
-                        "minLength": 0
-                    },
-                    "password": {
-                        "type": "string",
-                        "format": "password",
-                        "description": "8 to 72 characters and at most 72 bytes (emoji count as 4).",
-                        "example": "correct-horse-42",
-                        "maxLength": 72,
-                        "minLength": 8
-                    }
-                },
-                "required": [
-                    "email",
-                    "name",
-                    "password"
-                ]
-            },
             "ApiProblem": {
                 "description": "RFC 9457 Problem Details. Switch on `code`, never on `title` or `detail`.",
                 "properties": {
@@ -472,17 +669,11 @@
                     },
                     "weekStart": {
                         "type": "string",
-                        "description": "One of MONDAY, SATURDAY, SUNDAY.",
                         "enum": [
                             "MONDAY",
-                            "TUESDAY",
-                            "WEDNESDAY",
-                            "THURSDAY",
-                            "FRIDAY",
                             "SATURDAY",
                             "SUNDAY"
-                        ],
-                        "example": "MONDAY"
+                        ]
                     },
                     "theme": {
                         "type": "string",
@@ -492,12 +683,48 @@
                             "DARK"
                         ]
                     },
+                    "onboardingCompleted": {
+                        "type": "boolean",
+                        "description": "false = show the onboarding screens after login."
+                    },
                     "createdAt": {
                         "type": "string",
                         "format": "date-time",
                         "example": "2026-11-26T08:15:00Z"
                     }
                 }
+            },
+            "RegisterRequest": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "example": "Ravi Kumar",
+                        "maxLength": 100,
+                        "minLength": 0
+                    },
+                    "email": {
+                        "type": "string",
+                        "format": "email",
+                        "description": "Stored lowercase. Must be unique.",
+                        "example": "ravi@mail.com",
+                        "maxLength": 254,
+                        "minLength": 0
+                    },
+                    "password": {
+                        "type": "string",
+                        "format": "password",
+                        "description": "8 to 72 characters and at most 72 bytes (emoji count as 4).",
+                        "example": "correct-horse-42",
+                        "maxLength": 72,
+                        "minLength": 8
+                    }
+                },
+                "required": [
+                    "email",
+                    "name",
+                    "password"
+                ]
             },
             "RefreshTokenRequest": {
                 "type": "object",
@@ -577,6 +804,106 @@
                     "email",
                     "password"
                 ]
+            },
+            "DeleteAccountRequest": {
+                "type": "object",
+                "properties": {
+                    "password": {
+                        "type": "string",
+                        "format": "password",
+                        "example": "correct-horse-42",
+                        "minLength": 1
+                    }
+                },
+                "required": [
+                    "password"
+                ]
+            },
+            "ChangePasswordRequest": {
+                "type": "object",
+                "properties": {
+                    "currentPassword": {
+                        "type": "string",
+                        "format": "password",
+                        "example": "correct-horse-42",
+                        "minLength": 1
+                    },
+                    "newPassword": {
+                        "type": "string",
+                        "format": "password",
+                        "description": "8 to 72 characters and at most 72 bytes (emoji count as 4).",
+                        "example": "battery-staple-77",
+                        "maxLength": 72,
+                        "minLength": 8
+                    },
+                    "deviceLabel": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "description": "Label for the new session on this device.",
+                        "example": "Pixel 8",
+                        "maxLength": 100,
+                        "minLength": 0
+                    }
+                },
+                "required": [
+                    "currentPassword",
+                    "newPassword"
+                ]
+            },
+            "UpdateProfileRequest": {
+                "type": "object",
+                "description": "Send only the fields you want to change. Missing or null fields are left unchanged.",
+                "properties": {
+                    "name": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "example": "Ravi Kumar",
+                        "maxLength": 100,
+                        "minLength": 1
+                    },
+                    "currency": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "description": "ISO 4217 code. Changes formatting only; amounts are never converted.",
+                        "example": "INR"
+                    },
+                    "timezone": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "description": "IANA timezone. Decides what 'today' and 'this month' mean.",
+                        "example": "Asia/Kolkata"
+                    },
+                    "weekStart": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "enum": [
+                            "MONDAY",
+                            "SATURDAY",
+                            "SUNDAY"
+                        ]
+                    },
+                    "theme": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "enum": [
+                            "SYSTEM",
+                            "LIGHT",
+                            "DARK"
+                        ]
+                    }
+                }
             }
         },
         "securitySchemes": {

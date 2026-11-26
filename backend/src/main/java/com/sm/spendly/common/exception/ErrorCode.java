@@ -32,8 +32,13 @@ public enum ErrorCode {
 	UNAUTHENTICATED(HttpStatus.UNAUTHORIZED, "Unauthenticated"),
 	INVALID_REFRESH_TOKEN(HttpStatus.UNAUTHORIZED, "Invalid refresh token"),
 
+	// Not 401: the app treats every 401 as "token expired, refresh". A wrong current
+	// password must not trigger that.
+	CURRENT_PASSWORD_INCORRECT(HttpStatus.BAD_REQUEST, "Current password incorrect"),
+
 	// Users
 	USER_NOT_FOUND(HttpStatus.NOT_FOUND, "User not found"),
+	CURRENCY_REQUIRED(HttpStatus.UNPROCESSABLE_CONTENT, "Currency required"),
 
 	// Server side
 	INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "Internal error");
