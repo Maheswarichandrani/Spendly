@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 
 import java.sql.SQLException;
 import java.time.DayOfWeek;
+import java.util.Optional;
 import java.util.UUID;
 
 import org.hibernate.exception.ConstraintViolationException;
@@ -22,6 +23,8 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import com.sm.spendly.common.exception.ConflictException;
 import com.sm.spendly.common.exception.ErrorCode;
+import com.sm.spendly.common.exception.NotFoundException;
+import com.sm.spendly.user.dto.LoginCredentials;
 import com.sm.spendly.user.dto.UserResponse;
 import com.sm.spendly.user.entity.ThemePreference;
 import com.sm.spendly.user.entity.User;
@@ -103,6 +106,51 @@ class UserServiceTest {
 		assertThatThrownBy(() -> userService.createUser("ravi@mail.com", null, "Ravi"))
 			.isInstanceOf(NullPointerException.class);
 		verify(userRepository, never()).saveAndFlush(any());
+	}
+
+	@Test
+	void getById_returnsUser() {
+		UUID id = UUID.randomUUID();
+		when(userRepository.findById(id)).thenReturn(Optional.of(userWithId("ravi@mail.com", id)));
+
+		UserResponse response = userService.getById(id);
+
+		assertThat(response.id()).isEqualTo(id);
+		assertThat(response.email()).isEqualTo("ravi@mail.com");
+	}
+
+	@Test
+	void getById_missing_throwsUserNotFound() {
+		UUID id = UUID.randomUUID();
+		when(userRepository.findById(id)).thenReturn(Optional.empty());
+
+		assertThatThrownBy(() -> userService.getById(id))
+			.isInstanceOf(NotFoundException.class)
+			.extracting(ex -> ((NotFoundException) ex).getErrorCode())
+			.isEqualTo(ErrorCode.USER_NOT_FOUND);
+	}
+
+	@Test
+	void findLoginCredentials_mapsIdAndHash() {
+		UUID id = UUID.randomUUID();
+		when(userRepository.findByEmail("ravi@mail.com")).thenReturn(Optional.of(userWithId("ravi@mail.com", id)));
+
+		Optional<LoginCredentials> credentials = userService.findLoginCredentials("ravi@mail.com");
+
+		assertThat(credentials).contains(new LoginCredentials(id, HASH));
+	}
+
+	@Test
+	void findLoginCredentials_unknown_returnsEmpty() {
+		when(userRepository.findByEmail("nobody@mail.com")).thenReturn(Optional.empty());
+
+		assertThat(userService.findLoginCredentials("nobody@mail.com")).isEmpty();
+	}
+
+	private static User userWithId(String email, UUID id) {
+		User user = new User(email, HASH, "Ravi");
+		ReflectionTestUtils.setField(user, "id", id);
+		return user;
 	}
 
 	/** Same shape Spring produces: its exception wrapping Hibernate's, which names the constraint. */

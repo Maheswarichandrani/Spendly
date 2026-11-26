@@ -54,11 +54,12 @@
 			<groupId>org.flywaydb</groupId>
 			<artifactId>flyway-database-postgresql</artifactId>
 		</dependency>
-		<!-- Only the password hashing part of Spring Security (BCrypt). The full security
-		     starter (filter chain, login) arrives in step 005. Version managed by Boot. -->
+		<!-- Spring Security + JWT support: the filter chain, BearerTokenAuthenticationFilter,
+		     and Nimbus JwtEncoder/JwtDecoder. Also brings spring-security-crypto (BCrypt).
+		     Boot 4 name; the old spring-boot-starter-oauth2-resource-server is deprecated. -->
 		<dependency>
-			<groupId>org.springframework.security</groupId>
-			<artifactId>spring-security-crypto</artifactId>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-security-oauth2-resource-server</artifactId>
 		</dependency>
 
 		<dependency>
@@ -100,6 +101,11 @@
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-webmvc-test</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-security-oauth2-resource-server-test</artifactId>
 			<scope>test</scope>
 		</dependency>
 		<dependency>

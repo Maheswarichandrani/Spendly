@@ -17,14 +17,19 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import com.sm.spendly.auth.dto.RegisterRequest;
+import com.sm.spendly.auth.dto.TokenResponse;
 import com.sm.spendly.auth.service.AuthService;
 import com.sm.spendly.common.exception.ConflictException;
 import com.sm.spendly.common.exception.ErrorCode;
+import com.sm.spendly.common.exception.UnauthorizedException;
+import com.sm.spendly.common.security.JwtConfig;
+import com.sm.spendly.common.security.SecurityConfig;
 import com.sm.spendly.user.dto.UserResponse;
 import com.sm.spendly.user.entity.ThemePreference;
 
@@ -32,11 +37,17 @@ import com.sm.spendly.user.entity.ThemePreference;
  * Web slice: only AuthController, the exception handler, Jackson and validation.
  * {@code @MockitoBean} puts a Mockito mock of AuthService into the Spring context,
  * so this tests HTTP behaviour alone (status codes, JSON, validation).
+ *
+ * <p>{@code @Import}: a web slice doesn't scan our @Configuration classes, so we bring in
+ * the real security rules. That proves register and login are reachable without a token.
  */
 @WebMvcTest(AuthController.class)
+@Import({ SecurityConfig.class, JwtConfig.class })
 class AuthControllerTest {
 
 	private static final String URL = "/api/v1/auth/register";
+
+	private static final String LOGIN_URL = "/api/v1/auth/login";
 
 	@Autowired
 	MockMvc mockMvc;
@@ -108,6 +119,44 @@ class AuthControllerTest {
 		assertThat(captor.getValue().email()).isEqualTo("Ravi@Mail.com");
 		// The password is never changed: spaces can be part of it.
 		assertThat(captor.getValue().password()).isEqualTo(" correct-horse-42 ");
+	}
+
+	// --------------------------------------------------------------------- login
+
+	@Test
+	void login_returns200WithToken() throws Exception {
+		when(authService.login(any())).thenReturn(new TokenResponse("signed.jwt.value", "Bearer", 900));
+
+		mockMvc.perform(post(LOGIN_URL).contentType(MediaType.APPLICATION_JSON).content("""
+				{ "email": "ravi@mail.com", "password": "correct-horse-42" }
+				"""))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.accessToken").value("signed.jwt.value"))
+			.andExpect(jsonPath("$.tokenType").value("Bearer"))
+			.andExpect(jsonPath("$.expiresIn").value(900));
+	}
+
+	@Test
+	void login_blankFields_returns400() throws Exception {
+		mockMvc.perform(post(LOGIN_URL).contentType(MediaType.APPLICATION_JSON).content("""
+				{ "email": "", "password": "" }
+				"""))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+			.andExpect(jsonPath("$.errors[*].field").value(containsInAnyOrder("email", "password")));
+	}
+
+	@Test
+	void login_badCredentials_returns401() throws Exception {
+		when(authService.login(any()))
+			.thenThrow(new UnauthorizedException(ErrorCode.INVALID_CREDENTIALS, "Email or password is incorrect."));
+
+		mockMvc.perform(post(LOGIN_URL).contentType(MediaType.APPLICATION_JSON).content("""
+				{ "email": "ravi@mail.com", "password": "wrong-password" }
+				"""))
+			.andExpect(status().isUnauthorized())
+			.andExpect(jsonPath("$.code").value("INVALID_CREDENTIALS"))
+			.andExpect(jsonPath("$.detail").value("Email or password is incorrect."));
 	}
 
 }

@@ -1,5 +1,6 @@
 package com.sm.spendly.user.repository;
 
+import java.util.Optional;
 import java.util.UUID;
 
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -20,5 +21,8 @@ public interface UserRepository extends JpaRepository<User, UUID> {
 	 */
 
 	boolean existsByEmail(String email);
+
+	/** Same rule: pass a lowercased email. Optional because the user may not exist. */
+	Optional<User> findByEmail(String email);
 
 }

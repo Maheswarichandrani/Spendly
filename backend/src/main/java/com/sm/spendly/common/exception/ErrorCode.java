@@ -27,6 +27,13 @@ public enum ErrorCode {
 	EMAIL_ALREADY_REGISTERED(HttpStatus.CONFLICT, "Email already registered"),
 	PASSWORD_TOO_LONG(HttpStatus.BAD_REQUEST, "Password too long"),
 
+	// Authentication
+	INVALID_CREDENTIALS(HttpStatus.UNAUTHORIZED, "Invalid credentials"),
+	UNAUTHENTICATED(HttpStatus.UNAUTHORIZED, "Unauthenticated"),
+
+	// Users
+	USER_NOT_FOUND(HttpStatus.NOT_FOUND, "User not found"),
+
 	// Server side
 	INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "Internal error");
 

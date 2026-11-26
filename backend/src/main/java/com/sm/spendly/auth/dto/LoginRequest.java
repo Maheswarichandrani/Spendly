@@ -1,0 +1,32 @@
+package com.sm.spendly.auth.dto;
+
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
+
+/**
+ * Body of POST /api/v1/auth/login.
+ *
+ * <p>No {@code @Size} on the password: a min/max rule here would tell an attacker the
+ * password policy. The 72-byte BCrypt limit is checked in AuthService instead, and it
+ * fails with the same INVALID_CREDENTIALS answer as a wrong password.
+ */
+public record LoginRequest(
+		@NotBlank(message = "Email is required.")
+		@Email(message = "Email must be a valid email address.")
+		@Size(max = 254, message = "Email must be at most 254 characters.")
+		String email,
+
+		@NotBlank(message = "Password is required.")
+		String password) {
+
+	public LoginRequest {
+		email = email == null ? null : email.strip();
+	}
+
+	@Override
+	public String toString() {
+		return "LoginRequest[email=***, password=***]";
+	}
+
+}
