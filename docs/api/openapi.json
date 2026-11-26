@@ -18,6 +18,10 @@
     ],
     "tags": [
         {
+            "name": "Categories",
+            "description": "What money is spent on or comes from. Every user starts with a default set."
+        },
+        {
             "name": "Accounts",
             "description": "Where money lives: cash, bank, cards, wallets. Balances and net worth."
         },
@@ -31,6 +35,81 @@
         }
     ],
     "paths": {
+        "/api/v1/categories/order": {
+            "put": {
+                "tags": [
+                    "Categories"
+                ],
+                "summary": "Reorder categories of one kind",
+                "description": "Send the ids top to bottom.",
+                "operationId": "reorder",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ReorderCategoriesRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "Active categories of that kind in the new order",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/CategoryResponse"
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "`VALIDATION_FAILED`",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiProblem"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "`CATEGORY_NOT_FOUND`: an id is unknown, not yours, or of the other kind",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiProblem"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Missing, invalid or expired access token. code: `UNAUTHENTICATED`.",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiProblem"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Unexpected server error. code: `INTERNAL_ERROR`.",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiProblem"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/accounts/order": {
             "put": {
                 "tags": [
@@ -38,7 +117,7 @@
                 ],
                 "summary": "Reorder accounts",
                 "description": "Send the ids top to bottom. Returns the new active list.",
-                "operationId": "reorder",
+                "operationId": "reorder_1",
                 "requestBody": {
                     "content": {
                         "application/json": {
@@ -127,6 +206,301 @@
                     },
                     "422": {
                         "description": "`CURRENCY_REQUIRED`: PATCH a currency first",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiProblem"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Missing, invalid or expired access token. code: `UNAUTHENTICATED`.",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiProblem"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Unexpected server error. code: `INTERNAL_ERROR`.",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiProblem"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/categories": {
+            "get": {
+                "tags": [
+                    "Categories"
+                ],
+                "summary": "List my categories",
+                "description": "Grouped by kind (EXPENSE first, then INCOME), each in display order.",
+                "operationId": "list",
+                "parameters": [
+                    {
+                        "name": "kind",
+                        "in": "query",
+                        "description": "Only this kind. Leave empty for both.",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "INCOME",
+                                "EXPENSE"
+                            ]
+                        }
+                    },
+                    {
+                        "name": "includeArchived",
+                        "in": "query",
+                        "description": "Also return archived categories.",
+                        "required": false,
+                        "schema": {
+                            "type": "boolean",
+                            "default": false
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/CategoryResponse"
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Missing, invalid or expired access token. code: `UNAUTHENTICATED`.",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiProblem"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Unexpected server error. code: `INTERNAL_ERROR`.",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiProblem"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "tags": [
+                    "Categories"
+                ],
+                "summary": "Create a category",
+                "description": "Goes to the end of its kind's list.",
+                "operationId": "create",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CreateCategoryRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/CategoryResponse"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "`VALIDATION_FAILED`",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiProblem"
+                                }
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "`CATEGORY_NAME_TAKEN` (unique per kind among active ones, ignoring case)",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiProblem"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "`CATEGORY_LIMIT_REACHED`",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiProblem"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Missing, invalid or expired access token. code: `UNAUTHENTICATED`.",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiProblem"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Unexpected server error. code: `INTERNAL_ERROR`.",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiProblem"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/categories/{id}/unarchive": {
+            "post": {
+                "tags": [
+                    "Categories"
+                ],
+                "summary": "Unarchive a category",
+                "operationId": "unarchive",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "The active category",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/CategoryResponse"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "`CATEGORY_NOT_FOUND`",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiProblem"
+                                }
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "`CATEGORY_NAME_TAKEN`",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiProblem"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "`CATEGORY_LIMIT_REACHED`",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiProblem"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Missing, invalid or expired access token. code: `UNAUTHENTICATED`.",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiProblem"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Unexpected server error. code: `INTERNAL_ERROR`.",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiProblem"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/categories/{id}/archive": {
+            "post": {
+                "tags": [
+                    "Categories"
+                ],
+                "summary": "Archive a category",
+                "description": "Hidden from pickers; past transactions keep it.",
+                "operationId": "archive",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "The archived category",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/CategoryResponse"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "`CATEGORY_NOT_FOUND`",
                         "content": {
                             "application/problem+json": {
                                 "schema": {
@@ -552,7 +926,7 @@
                 ],
                 "summary": "List my accounts",
                 "description": "In display order. Archived ones only if asked.",
-                "operationId": "list",
+                "operationId": "list_1",
                 "parameters": [
                     {
                         "name": "includeArchived",
@@ -607,7 +981,7 @@
                 ],
                 "summary": "Create an account",
                 "description": "Only name and type are required. Goes to the end of the list.",
-                "operationId": "create",
+                "operationId": "create_1",
                 "requestBody": {
                     "content": {
                         "application/json": {
@@ -688,7 +1062,7 @@
                     "Accounts"
                 ],
                 "summary": "Unarchive an account",
-                "operationId": "unarchive",
+                "operationId": "unarchive_1",
                 "parameters": [
                     {
                         "name": "id",
@@ -771,7 +1145,7 @@
                 ],
                 "summary": "Archive an account",
                 "description": "Hides it and leaves it out of totals. History is kept.",
-                "operationId": "archive",
+                "operationId": "archive_1",
                 "parameters": [
                     {
                         "name": "id",
@@ -938,13 +1312,260 @@
                 }
             }
         },
+        "/api/v1/categories/{id}": {
+            "get": {
+                "tags": [
+                    "Categories"
+                ],
+                "summary": "Get one category",
+                "operationId": "get",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "The category",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/CategoryResponse"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "`CATEGORY_NOT_FOUND`",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiProblem"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Missing, invalid or expired access token. code: `UNAUTHENTICATED`.",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiProblem"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Unexpected server error. code: `INTERNAL_ERROR`.",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiProblem"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "tags": [
+                    "Categories"
+                ],
+                "summary": "Delete a category",
+                "description": "If the category has transactions, pass `replaceWith`: they move to that category (same kind, active). Without it you get 409 `CATEGORY_IN_USE`. Prefer archive to keep history.",
+                "operationId": "delete",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    },
+                    {
+                        "name": "replaceWith",
+                        "in": "query",
+                        "description": "Category that takes over this one's transactions.",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Deleted"
+                    },
+                    "404": {
+                        "description": "`CATEGORY_NOT_FOUND`",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiProblem"
+                                }
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "`CATEGORY_IN_USE`: it has transactions and no `replaceWith` was given",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiProblem"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "`INVALID_REPLACEMENT_CATEGORY`: replacement missing, archived, itself, or other kind",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiProblem"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Missing, invalid or expired access token. code: `UNAUTHENTICATED`.",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiProblem"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Unexpected server error. code: `INTERNAL_ERROR`.",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiProblem"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "patch": {
+                "tags": [
+                    "Categories"
+                ],
+                "summary": "Edit a category",
+                "description": "Name, icon, color. Kind can't change.",
+                "operationId": "update_1",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UpdateCategoryRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "The updated category",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/CategoryResponse"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "`VALIDATION_FAILED`",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiProblem"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "`CATEGORY_NOT_FOUND`",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiProblem"
+                                }
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "`CATEGORY_NAME_TAKEN`",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiProblem"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "`CATEGORY_ARCHIVED`",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiProblem"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Missing, invalid or expired access token. code: `UNAUTHENTICATED`.",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiProblem"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Unexpected server error. code: `INTERNAL_ERROR`.",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiProblem"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/accounts/{id}": {
             "get": {
                 "tags": [
                     "Accounts"
                 ],
                 "summary": "Get one account",
-                "operationId": "get",
+                "operationId": "get_1",
                 "parameters": [
                     {
                         "name": "id",
@@ -1005,7 +1626,7 @@
                 ],
                 "summary": "Delete an account",
                 "description": "Permanent. Once transactions exist (next step), accounts with history can only be archived.",
-                "operationId": "delete",
+                "operationId": "delete_1",
                 "parameters": [
                     {
                         "name": "id",
@@ -1059,7 +1680,7 @@
                 ],
                 "summary": "Edit an account",
                 "description": "Send only the fields to change. Type can't change.",
-                "operationId": "update_1",
+                "operationId": "update_2",
                 "parameters": [
                     {
                         "name": "id",
@@ -1200,22 +1821,30 @@
     },
     "components": {
         "schemas": {
-            "ReorderAccountsRequest": {
+            "ReorderCategoriesRequest": {
                 "type": "object",
                 "properties": {
-                    "accountIds": {
+                    "kind": {
+                        "type": "string",
+                        "enum": [
+                            "INCOME",
+                            "EXPENSE"
+                        ]
+                    },
+                    "categoryIds": {
                         "type": "array",
-                        "description": "Ids in the new order, first = top of the list.",
+                        "description": "Ids of this kind in the new order, first = top.",
                         "items": {
                             "type": "string",
                             "format": "uuid"
                         },
-                        "maxItems": 200,
+                        "maxItems": 300,
                         "minItems": 0
                     }
                 },
                 "required": [
-                    "accountIds"
+                    "categoryIds",
+                    "kind"
                 ]
             },
             "ApiProblem": {
@@ -1272,6 +1901,64 @@
                         "type": "string"
                     }
                 }
+            },
+            "CategoryResponse": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "name": {
+                        "type": "string",
+                        "example": "Food & Dining"
+                    },
+                    "kind": {
+                        "type": "string",
+                        "enum": [
+                            "INCOME",
+                            "EXPENSE"
+                        ]
+                    },
+                    "icon": {
+                        "type": "string",
+                        "example": "fork-knife"
+                    },
+                    "color": {
+                        "type": "string",
+                        "example": "#F97316"
+                    },
+                    "archived": {
+                        "type": "boolean"
+                    },
+                    "sortOrder": {
+                        "type": "integer",
+                        "format": "int32",
+                        "description": "Position within its kind, 0 = top."
+                    },
+                    "createdAt": {
+                        "type": "string",
+                        "format": "date-time"
+                    }
+                }
+            },
+            "ReorderAccountsRequest": {
+                "type": "object",
+                "properties": {
+                    "accountIds": {
+                        "type": "array",
+                        "description": "Ids in the new order, first = top of the list.",
+                        "items": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "maxItems": 200,
+                        "minItems": 0
+                    }
+                },
+                "required": [
+                    "accountIds"
+                ]
             },
             "AccountResponse": {
                 "type": "object",
@@ -1435,6 +2122,47 @@
                         "example": "2026-11-26T08:15:00Z"
                     }
                 }
+            },
+            "CreateCategoryRequest": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "example": "Pets",
+                        "maxLength": 50,
+                        "minLength": 0
+                    },
+                    "kind": {
+                        "type": "string",
+                        "description": "Cannot be changed later.",
+                        "enum": [
+                            "INCOME",
+                            "EXPENSE"
+                        ]
+                    },
+                    "icon": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "description": "Phosphor icon name. Default: tag.",
+                        "example": "paw-print",
+                        "pattern": "^[a-z0-9-]{1,50}$"
+                    },
+                    "color": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "description": "Hex color. Default #6B7280.",
+                        "example": "#F59E0B",
+                        "pattern": "^#[0-9A-Fa-f]{6}$"
+                    }
+                },
+                "required": [
+                    "kind",
+                    "name"
+                ]
             },
             "RegisterRequest": {
                 "type": "object",
@@ -1738,6 +2466,37 @@
                             "LIGHT",
                             "DARK"
                         ]
+                    }
+                }
+            },
+            "UpdateCategoryRequest": {
+                "type": "object",
+                "description": "Send only the fields you want to change.",
+                "properties": {
+                    "name": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "example": "Pets",
+                        "maxLength": 50,
+                        "minLength": 1
+                    },
+                    "icon": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "example": "paw-print",
+                        "pattern": "^[a-z0-9-]{1,50}$"
+                    },
+                    "color": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "example": "#F59E0B",
+                        "pattern": "^#[0-9A-Fa-f]{6}$"
                     }
                 }
             },

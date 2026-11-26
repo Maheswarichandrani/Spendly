@@ -22,6 +22,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import com.sm.spendly.user.entity.WeekStart;
+import com.sm.spendly.category.service.CategoryService;
 import com.sm.spendly.common.exception.BusinessRuleException;
 import com.sm.spendly.common.exception.ConflictException;
 import com.sm.spendly.common.exception.ErrorCode;
@@ -45,6 +46,9 @@ class UserServiceTest {
 	@Mock
 	UserRepository userRepository;
 
+	@Mock
+	CategoryService categoryService;
+
 	@InjectMocks
 	UserService userService;
 
@@ -62,6 +66,8 @@ class UserServiceTest {
 		UserResponse response = userService.createUser("ravi@mail.com", HASH, "Ravi Kumar");
 
 		verify(userRepository).saveAndFlush(any(User.class));
+		// The new user gets the default categories, in the same transaction.
+		verify(categoryService).createDefaults(id);
 		assertThat(response.id()).isEqualTo(id);
 		assertThat(response.email()).isEqualTo("ravi@mail.com");
 		assertThat(response.name()).isEqualTo("Ravi Kumar");
@@ -81,6 +87,7 @@ class UserServiceTest {
 			.extracting(ex -> ((ConflictException) ex).getErrorCode())
 			.isEqualTo(ErrorCode.EMAIL_ALREADY_REGISTERED);
 		verify(userRepository, never()).saveAndFlush(any());
+		verify(categoryService, never()).createDefaults(any());
 	}
 
 	@Test

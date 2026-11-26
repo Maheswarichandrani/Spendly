@@ -47,6 +47,15 @@ public enum ErrorCode {
 	ACCOUNT_ARCHIVED(HttpStatus.UNPROCESSABLE_CONTENT, "Account archived"),
 	CREDIT_CARD_FIELDS_ONLY(HttpStatus.UNPROCESSABLE_CONTENT, "Credit card fields only"),
 
+	// Categories
+	CATEGORY_NOT_FOUND(HttpStatus.NOT_FOUND, "Category not found"),
+	CATEGORY_NAME_TAKEN(HttpStatus.CONFLICT, "Category name taken"),
+	CATEGORY_IN_USE(HttpStatus.CONFLICT, "Category in use"),
+	CATEGORY_LIMIT_REACHED(HttpStatus.UNPROCESSABLE_CONTENT, "Category limit reached"),
+	CATEGORY_ARCHIVED(HttpStatus.UNPROCESSABLE_CONTENT, "Category archived"),
+	CATEGORY_KIND_MISMATCH(HttpStatus.UNPROCESSABLE_CONTENT, "Category kind mismatch"),
+	INVALID_REPLACEMENT_CATEGORY(HttpStatus.UNPROCESSABLE_CONTENT, "Invalid replacement category"),
+
 	// Server side
 	INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "Internal error");
 

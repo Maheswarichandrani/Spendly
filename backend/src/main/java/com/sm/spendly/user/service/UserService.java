@@ -11,6 +11,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.sm.spendly.category.service.CategoryService;
 import com.sm.spendly.common.exception.BusinessRuleException;
 import com.sm.spendly.common.exception.ConflictException;
 import com.sm.spendly.common.exception.ErrorCode;
@@ -38,10 +39,13 @@ public class UserService {
 
 	private final UserRepository userRepository;
 
-	// Constructor injection: the dependency is final and visible, and a unit test can
-	// pass a mock with plain "new UserService(mock)".
-	public UserService(UserRepository userRepository) {
+	private final CategoryService categoryService;
+
+	// Constructor injection: the dependencies are final and visible, and a unit test can
+	// pass mocks with plain "new UserService(...)".
+	public UserService(UserRepository userRepository, CategoryService categoryService) {
 		this.userRepository = userRepository;
+		this.categoryService = categoryService;
 	}
 
 	/**
@@ -66,6 +70,9 @@ public class UserService {
 			// context, and the SQL would run at commit, after this try block. Flushing
 			// now makes a unique violation happen here, where we can catch it.
 			User saved = userRepository.saveAndFlush(new User(email, passwordHash, name));
+			// Same transaction (propagation REQUIRED, see CategoryService.createDefaults):
+			// if seeding fails, the user row is rolled back too.
+			categoryService.createDefaults(saved.getId());
 			log.info("User registered userId={}", saved.getId());
 			return UserMapper.toResponse(saved);
 		}
