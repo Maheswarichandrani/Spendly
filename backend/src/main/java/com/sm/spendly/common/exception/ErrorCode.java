@@ -40,6 +40,13 @@ public enum ErrorCode {
 	USER_NOT_FOUND(HttpStatus.NOT_FOUND, "User not found"),
 	CURRENCY_REQUIRED(HttpStatus.UNPROCESSABLE_CONTENT, "Currency required"),
 
+	// Accounts
+	ACCOUNT_NOT_FOUND(HttpStatus.NOT_FOUND, "Account not found"),
+	ACCOUNT_NAME_TAKEN(HttpStatus.CONFLICT, "Account name taken"),
+	ACCOUNT_LIMIT_REACHED(HttpStatus.UNPROCESSABLE_CONTENT, "Account limit reached"),
+	ACCOUNT_ARCHIVED(HttpStatus.UNPROCESSABLE_CONTENT, "Account archived"),
+	CREDIT_CARD_FIELDS_ONLY(HttpStatus.UNPROCESSABLE_CONTENT, "Credit card fields only"),
+
 	// Server side
 	INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "Internal error");
 

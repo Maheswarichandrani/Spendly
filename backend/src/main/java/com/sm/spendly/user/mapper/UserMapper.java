@@ -4,7 +4,7 @@ import com.sm.spendly.user.dto.UserResponse;
 import com.sm.spendly.user.entity.User;
 
 /**
- * Entity to DTO in one place. Hand-written for now; MapStruct arrives in the accounts
+ * Entity to DTO in one place. Hand-written for now; MapStruct arrives in the categories
  * step, when there are enough mappings to justify a code generator.
  */
 public final class UserMapper {
