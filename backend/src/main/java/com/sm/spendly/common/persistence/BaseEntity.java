@@ -1,3 +1,4 @@
+
 package com.sm.spendly.common.persistence;
 
 import java.time.Instant;

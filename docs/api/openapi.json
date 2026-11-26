@@ -1,0 +1,411 @@
+{
+    "openapi": "3.1.0",
+    "info": {
+        "title": "Spendly API",
+        "description": "Personal finance API for the Spendly mobile app.\n\n**Auth:** call `POST /api/v1/auth/login`, then send `Authorization: Bearer <accessToken>` on every other request. Click **Authorize** above to do that here.\n\n**Errors:** every error is `application/problem+json` (see the `ApiProblem` schema). Switch on the `code` field.\n\n**Money** is a decimal string (`\"1250.50\"`), never a number. **Times** are ISO-8601 UTC instants (`2026-11-26T08:15:00Z`).",
+        "version": "v1"
+    },
+    "servers": [
+        {
+            "url": "/",
+            "description": "This server"
+        }
+    ],
+    "security": [
+        {
+            "bearerAuth": []
+        }
+    ],
+    "tags": [
+        {
+            "name": "Users",
+            "description": "The logged-in user's profile."
+        },
+        {
+            "name": "Auth",
+            "description": "Register and log in. These endpoints need no token."
+        }
+    ],
+    "paths": {
+        "/api/v1/auth/register": {
+            "post": {
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Create an account",
+                "description": "Email is stored lowercase and must be unique. Does not log in: call /login next.",
+                "operationId": "register",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/RegisterRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "201": {
+                        "description": "Account created",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/UserResponse"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "`VALIDATION_FAILED` (see `errors[]`) or `PASSWORD_TOO_LONG` (over 72 bytes)",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiProblem"
+                                }
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "`EMAIL_ALREADY_REGISTERED`",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiProblem"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Unexpected server error. code: `INTERNAL_ERROR`.",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiProblem"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": []
+            }
+        },
+        "/api/v1/auth/login": {
+            "post": {
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Log in",
+                "description": "Returns a short-lived access token. Send it as `Authorization: Bearer <accessToken>`.",
+                "operationId": "login",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/LoginRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "Logged in",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TokenResponse"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "`VALIDATION_FAILED`",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiProblem"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "`INVALID_CREDENTIALS`. Same answer for an unknown email or a wrong password, on purpose.",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiProblem"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Unexpected server error. code: `INTERNAL_ERROR`.",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiProblem"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": []
+            }
+        },
+        "/api/v1/users/me": {
+            "get": {
+                "tags": [
+                    "Users"
+                ],
+                "summary": "Get my profile",
+                "operationId": "me",
+                "responses": {
+                    "200": {
+                        "description": "The logged-in user",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/UserResponse"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "`USER_NOT_FOUND`: the account was deleted after the token was issued",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiProblem"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Missing, invalid or expired access token. code: `UNAUTHENTICATED`.",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiProblem"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Unexpected server error. code: `INTERNAL_ERROR`.",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiProblem"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "components": {
+        "schemas": {
+            "RegisterRequest": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "example": "Ravi Kumar",
+                        "maxLength": 100,
+                        "minLength": 0
+                    },
+                    "email": {
+                        "type": "string",
+                        "format": "email",
+                        "description": "Stored lowercase. Must be unique.",
+                        "example": "ravi@mail.com",
+                        "maxLength": 254,
+                        "minLength": 0
+                    },
+                    "password": {
+                        "type": "string",
+                        "format": "password",
+                        "description": "8 to 72 characters and at most 72 bytes (emoji count as 4).",
+                        "example": "correct-horse-42",
+                        "maxLength": 72,
+                        "minLength": 8
+                    }
+                },
+                "required": [
+                    "email",
+                    "name",
+                    "password"
+                ]
+            },
+            "ApiProblem": {
+                "description": "RFC 9457 Problem Details. Switch on `code`, never on `title` or `detail`.",
+                "properties": {
+                    "type": {
+                        "type": "string",
+                        "example": "about:blank"
+                    },
+                    "title": {
+                        "type": "string",
+                        "example": "Validation failed"
+                    },
+                    "status": {
+                        "type": "integer",
+                        "format": "int32",
+                        "example": 400
+                    },
+                    "detail": {
+                        "type": "string",
+                        "description": "Human-readable, safe to show the user.",
+                        "example": "Request has invalid fields."
+                    },
+                    "instance": {
+                        "type": "string",
+                        "example": "/api/v1/auth/register"
+                    },
+                    "code": {
+                        "type": "string",
+                        "description": "Stable machine-readable error code.",
+                        "example": "VALIDATION_FAILED"
+                    },
+                    "requestId": {
+                        "type": "string",
+                        "description": "Same id as the X-Request-Id response header; quote it in bug reports.",
+                        "example": "7ae20fcd-8f9c-43df-8e7c-1fe487940a64"
+                    },
+                    "errors": {
+                        "type": "array",
+                        "description": "Only for VALIDATION_FAILED: one entry per invalid field.",
+                        "items": {
+                            "$ref": "#/components/schemas/ValidationError"
+                        }
+                    }
+                }
+            },
+            "ValidationError": {
+                "description": "Only for VALIDATION_FAILED: one entry per invalid field.",
+                "properties": {
+                    "field": {
+                        "type": "string"
+                    },
+                    "message": {
+                        "type": "string"
+                    }
+                }
+            },
+            "UserResponse": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "example": "019376a2-5c1e-7d3a-9f2b-4c8e1a0b2d3f"
+                    },
+                    "name": {
+                        "type": "string",
+                        "example": "Ravi Kumar"
+                    },
+                    "email": {
+                        "type": "string",
+                        "example": "ravi@mail.com"
+                    },
+                    "emailVerified": {
+                        "type": "boolean"
+                    },
+                    "currency": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "description": "ISO 4217 code. null until chosen in onboarding.",
+                        "example": "INR"
+                    },
+                    "timezone": {
+                        "type": "string",
+                        "description": "IANA timezone. 'Today' and 'this month' are computed in this zone.",
+                        "example": "Asia/Kolkata"
+                    },
+                    "weekStart": {
+                        "type": "string",
+                        "description": "One of MONDAY, SATURDAY, SUNDAY.",
+                        "enum": [
+                            "MONDAY",
+                            "TUESDAY",
+                            "WEDNESDAY",
+                            "THURSDAY",
+                            "FRIDAY",
+                            "SATURDAY",
+                            "SUNDAY"
+                        ],
+                        "example": "MONDAY"
+                    },
+                    "theme": {
+                        "type": "string",
+                        "enum": [
+                            "SYSTEM",
+                            "LIGHT",
+                            "DARK"
+                        ]
+                    },
+                    "createdAt": {
+                        "type": "string",
+                        "format": "date-time",
+                        "example": "2026-11-26T08:15:00Z"
+                    }
+                }
+            },
+            "LoginRequest": {
+                "type": "object",
+                "properties": {
+                    "email": {
+                        "type": "string",
+                        "format": "email",
+                        "description": "Case-insensitive; spaces around it are ignored.",
+                        "example": "ravi@mail.com",
+                        "maxLength": 254,
+                        "minLength": 0
+                    },
+                    "password": {
+                        "type": "string",
+                        "format": "password",
+                        "example": "correct-horse-42",
+                        "minLength": 1
+                    }
+                },
+                "required": [
+                    "email",
+                    "password"
+                ]
+            },
+            "TokenResponse": {
+                "type": "object",
+                "properties": {
+                    "accessToken": {
+                        "type": "string",
+                        "description": "Signed JWT. Send as `Authorization: Bearer <accessToken>`.",
+                        "example": "eyJraWQiOiJzcGVuZGx5LWRldi0xIiwiYWxnIjoiUlMyNTYifQ..."
+                    },
+                    "tokenType": {
+                        "type": "string",
+                        "example": "Bearer"
+                    },
+                    "expiresIn": {
+                        "type": "integer",
+                        "format": "int64",
+                        "description": "Seconds until the access token expires.",
+                        "example": 900
+                    }
+                }
+            }
+        },
+        "securitySchemes": {
+            "bearerAuth": {
+                "type": "http",
+                "description": "Access token from /api/v1/auth/login. Expires after `expiresIn` seconds.",
+                "scheme": "bearer",
+                "bearerFormat": "JWT"
+            }
+        }
+    }
+}

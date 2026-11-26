@@ -1,6 +1,8 @@
 package com.sm.spendly.user.service;
 
 import java.util.Objects;
+import java.util.Optional;
+import java.util.UUID;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -10,7 +12,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.sm.spendly.common.exception.ConflictException;
 import com.sm.spendly.common.exception.ErrorCode;
+import com.sm.spendly.common.exception.NotFoundException;
 import com.sm.spendly.common.persistence.ConstraintNames;
+import com.sm.spendly.user.dto.LoginCredentials;
 import com.sm.spendly.user.dto.UserResponse;
 import com.sm.spendly.user.entity.User;
 import com.sm.spendly.user.mapper.UserMapper;
@@ -72,6 +76,21 @@ public class UserService {
 			// Any other constraint is a bug: let the global handler deal with it.
 			throw ex;
 		}
+	}
+
+	/** Login lookup. Hands out only id + hash, never the entity. */
+	@Transactional(readOnly = true)
+	public Optional<LoginCredentials> findLoginCredentials(String email) {
+		return userRepository.findByEmail(email)
+			.map(user -> new LoginCredentials(user.getId(), user.getPasswordHash()));
+	}
+
+	/** The id comes from the token, so a miss means the user was deleted after login. */
+	@Transactional(readOnly = true)
+	public UserResponse getById(UUID id) {
+		User user = userRepository.findById(id)
+			.orElseThrow(() -> new NotFoundException(ErrorCode.USER_NOT_FOUND, "User not found."));
+		return UserMapper.toResponse(user);
 	}
 
 }

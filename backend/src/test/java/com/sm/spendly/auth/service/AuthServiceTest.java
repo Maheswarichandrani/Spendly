@@ -10,21 +10,34 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import java.time.Duration;
+import java.util.Optional;
+import java.util.UUID;
+
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
+import com.sm.spendly.auth.dto.LoginRequest;
 import com.sm.spendly.auth.dto.RegisterRequest;
+import com.sm.spendly.auth.dto.TokenResponse;
+import com.sm.spendly.common.exception.ApiException;
 import com.sm.spendly.common.exception.BadRequestException;
 import com.sm.spendly.common.exception.ErrorCode;
+import com.sm.spendly.common.exception.UnauthorizedException;
+import com.sm.spendly.user.dto.LoginCredentials;
 import com.sm.spendly.user.service.UserService;
 
 @ExtendWith(MockitoExtension.class)
 class AuthServiceTest {
+
+	private static final String DUMMY_HASH = "DUMMY-HASH";
+
+	private static final String TIMING_INPUT = "timing-equalizer";
 
 	@Mock
 	UserService userService;
@@ -32,8 +45,19 @@ class AuthServiceTest {
 	@Mock
 	PasswordEncoder passwordEncoder;
 
-	@InjectMocks
+	@Mock
+	TokenService tokenService;
+
 	AuthService authService;
+
+	@BeforeEach
+	void setUp() {
+		// The constructor hashes a random value once to make the dummy hash.
+		when(passwordEncoder.encode(anyString())).thenReturn(DUMMY_HASH);
+		authService = new AuthService(userService, passwordEncoder, tokenService);
+	}
+
+	// ------------------------------------------------------------------ register
 
 	@Test
 	void register_normalizesEmailAndName() {
@@ -65,7 +89,7 @@ class AuthServiceTest {
 			.isInstanceOf(BadRequestException.class)
 			.extracting(ex -> ((BadRequestException) ex).getErrorCode())
 			.isEqualTo(ErrorCode.PASSWORD_TOO_LONG);
-		verifyNoInteractions(passwordEncoder);
+		verify(passwordEncoder, never()).encode(emojiPassword);
 		verify(userService, never()).createUser(anyString(), anyString(), anyString());
 	}
 
@@ -77,6 +101,88 @@ class AuthServiceTest {
 		authService.register(new RegisterRequest("Ravi", "ravi@mail.com", password));
 
 		verify(userService).createUser(any(), eq("hashed"), any());
+	}
+
+	// --------------------------------------------------------------------- login
+
+	@Test
+	void login_returnsTokenForCorrectPassword() {
+		UUID id = UUID.randomUUID();
+		when(userService.findLoginCredentials("ravi@mail.com")).thenReturn(Optional.of(new LoginCredentials(id, "hash")));
+		when(passwordEncoder.matches("correct-horse-42", "hash")).thenReturn(true);
+		when(tokenService.issueAccessToken(id)).thenReturn("signed.jwt.value");
+		when(tokenService.accessTokenTtl()).thenReturn(Duration.ofMinutes(15));
+
+		TokenResponse response = authService.login(new LoginRequest("ravi@mail.com", "correct-horse-42"));
+
+		assertThat(response.accessToken()).isEqualTo("signed.jwt.value");
+		assertThat(response.tokenType()).isEqualTo("Bearer");
+		assertThat(response.expiresIn()).isEqualTo(900);
+	}
+
+	@Test
+	void login_normalizesEmail() {
+		when(userService.findLoginCredentials("ravi@mail.com")).thenReturn(Optional.empty());
+
+		assertInvalidCredentials(() -> authService.login(new LoginRequest(" Ravi@Mail.com ", "correct-horse-42")));
+
+		verify(userService).findLoginCredentials("ravi@mail.com");
+	}
+
+	@Test
+	void login_unknownEmail_runsDummyCheck_andFails() {
+		when(userService.findLoginCredentials("nobody@mail.com")).thenReturn(Optional.empty());
+
+		assertInvalidCredentials(() -> authService.login(new LoginRequest("nobody@mail.com", "correct-horse-42")));
+
+		// The expensive check still ran, so this answer takes as long as a wrong password.
+		verify(passwordEncoder).matches(TIMING_INPUT, DUMMY_HASH);
+		verifyNoInteractions(tokenService);
+	}
+
+	@Test
+	void login_wrongPassword_fails() {
+		when(userService.findLoginCredentials("ravi@mail.com"))
+			.thenReturn(Optional.of(new LoginCredentials(UUID.randomUUID(), "hash")));
+		when(passwordEncoder.matches("wrong-password", "hash")).thenReturn(false);
+
+		assertInvalidCredentials(() -> authService.login(new LoginRequest("ravi@mail.com", "wrong-password")));
+
+		verifyNoInteractions(tokenService);
+	}
+
+	@Test
+	void login_nullHash_runsDummyCheck_andFails() {
+		// A future Google-only user has no password.
+		when(userService.findLoginCredentials("google@mail.com"))
+			.thenReturn(Optional.of(new LoginCredentials(UUID.randomUUID(), null)));
+
+		assertInvalidCredentials(() -> authService.login(new LoginRequest("google@mail.com", "any-password")));
+
+		verify(passwordEncoder).matches(TIMING_INPUT, DUMMY_HASH);
+		verifyNoInteractions(tokenService);
+	}
+
+	@Test
+	void login_passwordOver72Bytes_fails() {
+		String emojiPassword = "😀".repeat(30);
+		when(userService.findLoginCredentials("ravi@mail.com"))
+			.thenReturn(Optional.of(new LoginCredentials(UUID.randomUUID(), "hash")));
+
+		assertInvalidCredentials(() -> authService.login(new LoginRequest("ravi@mail.com", emojiPassword)));
+
+		// Never handed to BCrypt (it can't take over 72 bytes); the dummy check runs instead.
+		verify(passwordEncoder, never()).matches(emojiPassword, "hash");
+		verify(passwordEncoder).matches(TIMING_INPUT, DUMMY_HASH);
+		verifyNoInteractions(tokenService);
+	}
+
+	private static void assertInvalidCredentials(Runnable login) {
+		assertThatThrownBy(login::run)
+			.isInstanceOf(UnauthorizedException.class)
+			.hasMessage("Email or password is incorrect.")
+			.extracting(ex -> ((ApiException) ex).getErrorCode())
+			.isEqualTo(ErrorCode.INVALID_CREDENTIALS);
 	}
 
 }

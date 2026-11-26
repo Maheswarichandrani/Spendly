@@ -17,17 +17,26 @@ import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
 import com.sm.spendly.common.logging.RequestIdFilter;
+import com.sm.spendly.common.security.JwtConfig;
+import com.sm.spendly.common.security.SecurityConfig;
 
 /**
  * Web-layer slice: starts only MVC (controllers, advice, Jackson, validation).
  * No database, no Docker, so it runs in seconds.
+ *
+ * <p>This test is about error <em>shapes</em>, not security. The probe URLs are locked like
+ * every other URL, so {@code @WithMockUser} runs each test as a logged-in user.
  */
 @WebMvcTest(ErrorProbeController.class)
+@Import({ SecurityConfig.class, JwtConfig.class })
+@WithMockUser
 class GlobalExceptionHandlerTest {
 
 	@Autowired

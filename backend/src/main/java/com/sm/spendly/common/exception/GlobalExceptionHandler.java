@@ -17,6 +17,7 @@ import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.HttpMediaTypeNotAcceptableException;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
@@ -65,6 +66,21 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 		ErrorCode code = ex.getErrorCode();
 		log.debug("API error code={} path={}", code, request.getRequestURI());
 		return toResponse(problem(code, ex.getMessage(), request.getRequestURI()));
+	}
+
+	/**
+	 * A request reached a locked URL without a valid token. Arrives here from the security
+	 * filter chain via ProblemDetailsAuthenticationEntryPoint.
+	 *
+	 * <p>Always the same detail: we never say whether the token was missing, expired or
+	 * forged. The app handles all three the same way, and an attacker learns nothing.
+	 * {@code WWW-Authenticate: Bearer} is the HTTP standard header for a 401.
+	 */
+	@ExceptionHandler(AuthenticationException.class)
+	ResponseEntity<ProblemDetail> handleAuthentication(AuthenticationException ex, HttpServletRequest request) {
+		log.debug("Unauthenticated request path={} reason={}", request.getRequestURI(), ex.getClass().getSimpleName());
+		ProblemDetail pd = problem(ErrorCode.UNAUTHENTICATED, "Authentication is required.", request.getRequestURI());
+		return ResponseEntity.status(pd.getStatus()).header(HttpHeaders.WWW_AUTHENTICATE, "Bearer").body(pd);
 	}
 
 	/**

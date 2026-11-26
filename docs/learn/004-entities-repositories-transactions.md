@@ -178,3 +178,14 @@ If the email already exists, step 7 throws `ConflictException` → the proxy doe
 2. **Break self-invocation.** Add a method `createTwice` in `UserService` without `@Transactional` that calls `createUser` twice with the same email. Call it from a test. Is the first user still saved after the second one fails? (Yes: there's no proxy in the inner calls, so each `saveAndFlush` runs in its own repository transaction.)
 3. **Derived query typo.** Rename `existsByEmail` to `existsByEmial` and start the app. Read the startup error. Rename it back.
 4. **Look at the SQL.** Run `UserRepositoryTest` and find the `Hibernate: insert into users ...` lines in the output. Count the columns and compare them with `V2__create_users.sql`.
+
+---
+
+## Remember these
+
+- An **entity** is a Java class mapped to a table. Only `@Getter`, never `@Data`.
+- A **repository** is just an interface. Spring writes the code, and method names become queries.
+- `save` only **queues** the SQL. It runs at **flush** (usually at commit). Use `saveAndFlush` when you need to catch the error right there.
+- `@Transactional` = all-or-nothing, through a **proxy**. A call from the same class skips the proxy.
+- Keep slow work (BCrypt) **outside** the transaction.
+- The database is the final guard: `UNIQUE` and `CHECK` constraints catch what code forgets.

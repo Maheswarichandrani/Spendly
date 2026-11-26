@@ -4,6 +4,8 @@ import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
+import io.swagger.v3.oas.annotations.media.Schema;
+
 /**
  * Body of POST /api/v1/auth/register.
  *
@@ -15,16 +17,20 @@ import jakarta.validation.constraints.Size;
 public record RegisterRequest(
 		@NotBlank(message = "Name is required.")
 		@Size(max = 100, message = "Name must be at most 100 characters.")
+		@Schema(example = "Ravi Kumar")
 		String name,
 
 		@NotBlank(message = "Email is required.")
 		@Email(message = "Email must be a valid email address.")
 		@Size(max = 254, message = "Email must be at most 254 characters.")
+		@Schema(example = "ravi@mail.com", description = "Stored lowercase. Must be unique.")
 		String email,
 
 		// 72 characters here; AuthService also checks 72 *bytes* (BCrypt's real limit).
 		@NotBlank(message = "Password is required.")
 		@Size(min = 8, max = 72, message = "Password must be 8 to 72 characters.")
+		@Schema(example = "correct-horse-42", format = "password",
+				description = "8 to 72 characters and at most 72 bytes (emoji count as 4).")
 		String password) {
 
 	public RegisterRequest {
