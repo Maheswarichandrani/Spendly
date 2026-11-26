@@ -198,6 +198,13 @@ class SecurityIntegrationTest {
 	}
 
 	@Test
+	void docsDisabled_apiDocsAndSwaggerUiNeedAuth() throws Exception {
+		// Default properties = docs off (like prod): the docs URLs are not public.
+		mockMvc.perform(get("/v3/api-docs")).andExpect(status().isUnauthorized());
+		mockMvc.perform(get("/swagger-ui/index.html")).andExpect(status().isUnauthorized());
+	}
+
+	@Test
 	void health_isPublic() throws Exception {
 		mockMvc.perform(get("/actuator/health")).andExpect(status().isOk());
 	}

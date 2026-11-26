@@ -1,6 +1,7 @@
 package com.sm.spendly.common.security;
 
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -19,8 +20,25 @@ import org.springframework.web.servlet.HandlerExceptionResolver;
 @Configuration(proxyBeanMethods = false)
 public class SecurityConfig {
 
+	/** The API docs URLs springdoc serves (JSON spec, UI page, UI assets). */
+	private static final String[] DOCS_PATHS = { "/v3/api-docs", "/v3/api-docs/**", "/swagger-ui.html", "/swagger-ui/**" };
+
+	/**
+	 * Same switch springdoc reads. Off by default (application.properties), on in dev.
+	 * When off, the docs URLs are not made public, so they fall under the 401 rule below.
+	 */
+	private final boolean apiDocsEnabled;
+
+	public SecurityConfig(@Value("${springdoc.api-docs.enabled:false}") boolean apiDocsEnabled) {
+		this.apiDocsEnabled = apiDocsEnabled;
+	}
+
 	@Bean
 	SecurityFilterChain apiSecurity(HttpSecurity http, AuthenticationEntryPoint entryPoint) throws Exception {
+		if (apiDocsEnabled) {
+			// Must come before anyRequest() below: rules are checked top to bottom.
+			http.authorizeHttpRequests(auth -> auth.requestMatchers(HttpMethod.GET, DOCS_PATHS).permitAll());
+		}
 		http
 			// No server session and no JSESSIONID cookie: every request proves itself
 			// with its own token.
