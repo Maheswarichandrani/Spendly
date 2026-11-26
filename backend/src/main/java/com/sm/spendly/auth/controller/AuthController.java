@@ -17,22 +17,27 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.sm.spendly.auth.dto.LoginRequest;
+import com.sm.spendly.auth.dto.RefreshTokenRequest;
 import com.sm.spendly.auth.dto.RegisterRequest;
 import com.sm.spendly.auth.dto.TokenResponse;
 import com.sm.spendly.auth.service.AuthService;
+import com.sm.spendly.common.security.CurrentUser;
 import com.sm.spendly.common.web.ApiProblem;
 import com.sm.spendly.user.dto.UserResponse;
 
 /** HTTP only: validate the body, call one service method, return a DTO. */
 @RestController
 @RequestMapping("/api/v1/auth")
-@Tag(name = "Auth", description = "Register and log in. These endpoints need no token.")
+@Tag(name = "Auth", description = "Register, log in, refresh tokens, log out. Only logout-all needs an access token.")
 public class AuthController {
 
 	private final AuthService authService;
 
-	public AuthController(AuthService authService) {
+	private final CurrentUser currentUser;
+
+	public AuthController(AuthService authService, CurrentUser currentUser) {
 		this.authService = authService;
+		this.currentUser = currentUser;
 	}
 
 	@PostMapping("/register")
@@ -62,6 +67,48 @@ public class AuthController {
 			content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ApiProblem.class)))
 	public TokenResponse login(@Valid @RequestBody LoginRequest request) {
 		return authService.login(request);
+	}
+
+	@PostMapping("/refresh")
+	@SecurityRequirements
+	@Operation(summary = "Get new tokens",
+			description = """
+					Trade the refresh token for a new access token **and a new refresh token**. Replace both in \
+					storage. The old refresh token stops working.
+
+					Run **one refresh at a time**: if two requests use the same refresh token, both fail and the \
+					device is logged out (this is how a stolen token is detected).""")
+	@ApiResponse(responseCode = "200", description = "New token pair")
+	@ApiResponse(responseCode = "400", description = "`VALIDATION_FAILED`",
+			content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ApiProblem.class)))
+	@ApiResponse(responseCode = "401",
+			description = "`INVALID_REFRESH_TOKEN`: unknown, expired, revoked or reused. Clear tokens and show login.",
+			content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ApiProblem.class)))
+	public TokenResponse refresh(@Valid @RequestBody RefreshTokenRequest request) {
+		return authService.refresh(request);
+	}
+
+	@PostMapping("/logout")
+	@ResponseStatus(HttpStatus.NO_CONTENT)
+	@SecurityRequirements
+	@Operation(summary = "Log out this device",
+			description = "Revokes this refresh token's session. Needs no access token, so it works even after the "
+					+ "access token expired. Always 204, even for an unknown token, so it is safe to retry.")
+	@ApiResponse(responseCode = "204", description = "Logged out")
+	@ApiResponse(responseCode = "400", description = "`VALIDATION_FAILED`",
+			content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ApiProblem.class)))
+	public void logout(@Valid @RequestBody RefreshTokenRequest request) {
+		authService.logout(request);
+	}
+
+	@PostMapping("/logout-all")
+	@ResponseStatus(HttpStatus.NO_CONTENT)
+	@Operation(summary = "Log out everywhere",
+			description = "Revokes every refresh token of the logged-in user, on all devices. Access tokens already "
+					+ "issued keep working until they expire (at most `expiresIn` seconds).")
+	@ApiResponse(responseCode = "204", description = "All sessions ended")
+	public void logoutAll() {
+		authService.logoutEverywhere(currentUser.id());
 	}
 
 }

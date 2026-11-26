@@ -55,7 +55,9 @@ public class SecurityConfig {
 
 			.authorizeHttpRequests(auth -> auth
 				// Public: you can't have a token before you register or log in.
-				.requestMatchers(HttpMethod.POST, "/api/v1/auth/register", "/api/v1/auth/login").permitAll()
+				.requestMatchers(HttpMethod.POST, "/api/v1/auth/register", "/api/v1/auth/login",
+						// The refresh token itself is the proof here, so no access token is needed.
+						"/api/v1/auth/refresh", "/api/v1/auth/logout").permitAll()
 				.requestMatchers(HttpMethod.GET, "/actuator/health", "/actuator/health/**").permitAll()
 				// Everything else, including unknown URLs, needs a valid token. So without
 				// a token, nobody can find out which URLs exist (401, never 404).

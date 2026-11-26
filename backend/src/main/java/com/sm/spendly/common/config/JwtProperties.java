@@ -16,7 +16,7 @@ import org.springframework.validation.annotation.Validated;
  * right away: if the private key is missing, the app refuses to start with a message
  * naming {@code spendly.jwt.private-key}, instead of failing on the first login.
  *
- * <p>Registered by {@code @ConfigurationPropertiesScan} on SpendlyApplication.
+ * <p>Registered by {@code @EnableConfigurationProperties} on JwtConfig.
  *
  * @param issuer         value of the "iss" claim; tokens with another issuer are rejected
  * @param accessTokenTtl how long an access token lives, e.g. "15m"

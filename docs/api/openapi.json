@@ -23,7 +23,7 @@
         },
         {
             "name": "Auth",
-            "description": "Register and log in. These endpoints need no token."
+            "description": "Register, log in, refresh tokens, log out. Only logout-all needs an access token."
         }
     ],
     "paths": {
@@ -88,6 +88,150 @@
                     }
                 },
                 "security": []
+            }
+        },
+        "/api/v1/auth/refresh": {
+            "post": {
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Get new tokens",
+                "description": "Trade the refresh token for a new access token **and a new refresh token**. Replace both in storage. The old refresh token stops working.\n\nRun **one refresh at a time**: if two requests use the same refresh token, both fail and the device is logged out (this is how a stolen token is detected).",
+                "operationId": "refresh",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/RefreshTokenRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "New token pair",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TokenResponse"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "`VALIDATION_FAILED`",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiProblem"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "`INVALID_REFRESH_TOKEN`: unknown, expired, revoked or reused. Clear tokens and show login.",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiProblem"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Unexpected server error. code: `INTERNAL_ERROR`.",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiProblem"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": []
+            }
+        },
+        "/api/v1/auth/logout": {
+            "post": {
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Log out this device",
+                "description": "Revokes this refresh token's session. Needs no access token, so it works even after the access token expired. Always 204, even for an unknown token, so it is safe to retry.",
+                "operationId": "logout",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/RefreshTokenRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "204": {
+                        "description": "Logged out"
+                    },
+                    "400": {
+                        "description": "`VALIDATION_FAILED`",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiProblem"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Unexpected server error. code: `INTERNAL_ERROR`.",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiProblem"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": []
+            }
+        },
+        "/api/v1/auth/logout-all": {
+            "post": {
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Log out everywhere",
+                "description": "Revokes every refresh token of the logged-in user, on all devices. Access tokens already issued keep working until they expire (at most `expiresIn` seconds).",
+                "operationId": "logoutAll",
+                "responses": {
+                    "204": {
+                        "description": "All sessions ended"
+                    },
+                    "401": {
+                        "description": "Missing, invalid or expired access token. code: `UNAUTHENTICATED`.",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiProblem"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Unexpected server error. code: `INTERNAL_ERROR`.",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiProblem"
+                                }
+                            }
+                        }
+                    }
+                }
             }
         },
         "/api/v1/auth/login": {
@@ -355,27 +499,19 @@
                     }
                 }
             },
-            "LoginRequest": {
+            "RefreshTokenRequest": {
                 "type": "object",
                 "properties": {
-                    "email": {
+                    "refreshToken": {
                         "type": "string",
-                        "format": "email",
-                        "description": "Case-insensitive; spaces around it are ignored.",
-                        "example": "ravi@mail.com",
-                        "maxLength": 254,
+                        "description": "The refreshToken from the last login or refresh.",
+                        "example": "q3Jw9mH0bS2xA7eK1vZt5Lr8Np4Yc6Ud0Wf3Gi9Oj2E",
+                        "maxLength": 200,
                         "minLength": 0
-                    },
-                    "password": {
-                        "type": "string",
-                        "format": "password",
-                        "example": "correct-horse-42",
-                        "minLength": 1
                     }
                 },
                 "required": [
-                    "email",
-                    "password"
+                    "refreshToken"
                 ]
             },
             "TokenResponse": {
@@ -395,8 +531,52 @@
                         "format": "int64",
                         "description": "Seconds until the access token expires.",
                         "example": 900
+                    },
+                    "refreshToken": {
+                        "type": "string",
+                        "description": "Keep in secure storage. Trade it at /auth/refresh. **Single use**: each refresh returns a new one; using an old one again logs this device out.",
+                        "example": "q3Jw9mH0bS2xA7eK1vZt5Lr8Np4Yc6Ud0Wf3Gi9Oj2E"
+                    },
+                    "refreshTokenExpiresAt": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "When the refresh token expires if not used.",
+                        "example": "2026-12-26T08:15:00Z"
                     }
                 }
+            },
+            "LoginRequest": {
+                "type": "object",
+                "properties": {
+                    "email": {
+                        "type": "string",
+                        "format": "email",
+                        "description": "Case-insensitive; spaces around it are ignored.",
+                        "example": "ravi@mail.com",
+                        "maxLength": 254,
+                        "minLength": 0
+                    },
+                    "password": {
+                        "type": "string",
+                        "format": "password",
+                        "example": "correct-horse-42",
+                        "minLength": 1
+                    },
+                    "deviceLabel": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "description": "Optional name of this device, shown later in the device list.",
+                        "example": "Pixel 8",
+                        "maxLength": 100,
+                        "minLength": 0
+                    }
+                },
+                "required": [
+                    "email",
+                    "password"
+                ]
             }
         },
         "securitySchemes": {

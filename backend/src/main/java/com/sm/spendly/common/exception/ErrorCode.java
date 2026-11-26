@@ -30,6 +30,7 @@ public enum ErrorCode {
 	// Authentication
 	INVALID_CREDENTIALS(HttpStatus.UNAUTHORIZED, "Invalid credentials"),
 	UNAUTHENTICATED(HttpStatus.UNAUTHORIZED, "Unauthenticated"),
+	INVALID_REFRESH_TOKEN(HttpStatus.UNAUTHORIZED, "Invalid refresh token"),
 
 	// Users
 	USER_NOT_FOUND(HttpStatus.NOT_FOUND, "User not found"),
