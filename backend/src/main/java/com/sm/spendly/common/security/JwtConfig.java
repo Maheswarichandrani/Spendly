@@ -14,6 +14,7 @@ import com.nimbusds.jose.jwk.JWKSet;
 import com.nimbusds.jose.jwk.RSAKey;
 import com.nimbusds.jose.jwk.source.ImmutableJWKSet;
 import com.sm.spendly.common.config.JwtProperties;
+import com.sm.spendly.common.config.RefreshTokenProperties;
 
 /**
  * The two JWT tools:
@@ -27,7 +28,7 @@ import com.sm.spendly.common.config.JwtProperties;
  * from the {@code spendly.jwt.*} properties and validated at startup.
  */
 @Configuration(proxyBeanMethods = false)
-@EnableConfigurationProperties(JwtProperties.class)
+@EnableConfigurationProperties({ JwtProperties.class, RefreshTokenProperties.class })
 public class JwtConfig {
 
 	@Bean

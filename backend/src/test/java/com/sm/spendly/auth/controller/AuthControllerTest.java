@@ -28,6 +28,7 @@ import com.sm.spendly.auth.service.AuthService;
 import com.sm.spendly.common.exception.ConflictException;
 import com.sm.spendly.common.exception.ErrorCode;
 import com.sm.spendly.common.exception.UnauthorizedException;
+import com.sm.spendly.common.security.CurrentUser;
 import com.sm.spendly.common.security.JwtConfig;
 import com.sm.spendly.common.security.SecurityConfig;
 import com.sm.spendly.user.dto.UserResponse;
@@ -54,6 +55,10 @@ class AuthControllerTest {
 
 	@MockitoBean
 	AuthService authService;
+
+	// AuthController needs it for logout-all. Not used by these tests.
+	@MockitoBean
+	CurrentUser currentUser;
 
 	@Test
 	void register_returns201WithUser() throws Exception {
@@ -125,7 +130,7 @@ class AuthControllerTest {
 
 	@Test
 	void login_returns200WithToken() throws Exception {
-		when(authService.login(any())).thenReturn(new TokenResponse("signed.jwt.value", "Bearer", 900));
+		when(authService.login(any())).thenReturn(new TokenResponse("signed.jwt.value", "Bearer", 900, "raw-refresh", Instant.parse("2026-12-26T08:00:00Z")));
 
 		mockMvc.perform(post(LOGIN_URL).contentType(MediaType.APPLICATION_JSON).content("""
 				{ "email": "ravi@mail.com", "password": "correct-horse-42" }
@@ -133,7 +138,8 @@ class AuthControllerTest {
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.accessToken").value("signed.jwt.value"))
 			.andExpect(jsonPath("$.tokenType").value("Bearer"))
-			.andExpect(jsonPath("$.expiresIn").value(900));
+			.andExpect(jsonPath("$.expiresIn").value(900))
+			.andExpect(jsonPath("$.refreshToken").value("raw-refresh"));
 	}
 
 	@Test

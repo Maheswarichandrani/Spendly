@@ -11,8 +11,11 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import com.sm.spendly.auth.dto.LoginRequest;
+import com.sm.spendly.auth.dto.RefreshTokenRequest;
 import com.sm.spendly.auth.dto.RegisterRequest;
 import com.sm.spendly.auth.dto.TokenResponse;
+import com.sm.spendly.auth.service.RefreshTokenService.IssuedRefreshToken;
+import com.sm.spendly.auth.service.RefreshTokenService.RotationResult;
 import com.sm.spendly.common.exception.BadRequestException;
 import com.sm.spendly.common.exception.ErrorCode;
 import com.sm.spendly.common.exception.UnauthorizedException;
@@ -21,7 +24,7 @@ import com.sm.spendly.user.dto.UserResponse;
 import com.sm.spendly.user.service.UserService;
 
 /**
- * Sign-up and login. Refresh tokens and logout come in step 006.
+ * Sign-up, login, token refresh and logout.
  *
  * <p>No {@code @Transactional} here on purpose. BCrypt takes about 250 ms. Inside a
  * transaction that would keep a database connection busy doing nothing. So we hash
@@ -44,6 +47,8 @@ public class AuthService {
 
 	private final TokenService tokenService;
 
+	private final RefreshTokenService refreshTokenService;
+
 	/**
 	 * A real BCrypt hash of a random value nobody knows, made once at startup with the
 	 * same encoder (same cost) as real passwords. When the email is unknown we still
@@ -51,10 +56,12 @@ public class AuthService {
 	 */
 	private final String dummyHash;
 
-	public AuthService(UserService userService, PasswordEncoder passwordEncoder, TokenService tokenService) {
+	public AuthService(UserService userService, PasswordEncoder passwordEncoder, TokenService tokenService,
+			RefreshTokenService refreshTokenService) {
 		this.userService = userService;
 		this.passwordEncoder = passwordEncoder;
 		this.tokenService = tokenService;
+		this.refreshTokenService = refreshTokenService;
 		this.dummyHash = passwordEncoder.encode(UUID.randomUUID().toString());
 	}
 
@@ -107,9 +114,37 @@ public class AuthService {
 		}
 
 		UUID userId = credentials.get().id();
-		String accessToken = tokenService.issueAccessToken(userId);
+		IssuedRefreshToken refreshToken = refreshTokenService.issueForLogin(userId, request.deviceLabel());
 		log.info("Login succeeded userId={}", userId);
-		return TokenResponse.bearer(accessToken, tokenService.accessTokenTtl());
+		return tokens(userId, refreshToken);
+	}
+
+	/**
+	 * Trades a refresh token for a new pair. RefreshTokenService has already committed its
+	 * work (including revoking a family on reuse) by the time we throw here, so the 401
+	 * can't undo it.
+	 */
+	public TokenResponse refresh(RefreshTokenRequest request) {
+		RotationResult result = refreshTokenService.rotate(request.refreshToken());
+		if (result instanceof RotationResult.Rotated rotated) {
+			return tokens(rotated.userId(), rotated.newToken());
+		}
+		// Same answer for unknown, expired and reused: the app's only move is "log in again".
+		throw new UnauthorizedException(ErrorCode.INVALID_REFRESH_TOKEN, "Your session has ended. Please log in again.");
+	}
+
+	public void logout(RefreshTokenRequest request) {
+		refreshTokenService.revokeFamilyOf(request.refreshToken());
+	}
+
+	public void logoutEverywhere(UUID userId) {
+		refreshTokenService.revokeAllForUser(userId);
+	}
+
+	private TokenResponse tokens(UUID userId, IssuedRefreshToken refreshToken) {
+		String accessToken = tokenService.issueAccessToken(userId);
+		return TokenResponse.bearer(accessToken, tokenService.accessTokenTtl(), refreshToken.rawToken(),
+				refreshToken.expiresAt());
 	}
 
 	private static UnauthorizedException loginFailed(String reason) {

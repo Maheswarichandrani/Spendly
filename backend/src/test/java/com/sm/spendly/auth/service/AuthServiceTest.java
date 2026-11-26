@@ -1,5 +1,11 @@
 package com.sm.spendly.auth.service;
 
+import com.sm.spendly.auth.service.RefreshTokenService.RotationResult;
+import com.sm.spendly.auth.service.RefreshTokenService.IssuedRefreshToken;
+import com.sm.spendly.auth.dto.RefreshTokenRequest;
+import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.ParameterizedTest;
+import java.time.Instant;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -48,13 +54,16 @@ class AuthServiceTest {
 	@Mock
 	TokenService tokenService;
 
+	@Mock
+	RefreshTokenService refreshTokenService;
+
 	AuthService authService;
 
 	@BeforeEach
 	void setUp() {
 		// The constructor hashes a random value once to make the dummy hash.
 		when(passwordEncoder.encode(anyString())).thenReturn(DUMMY_HASH);
-		authService = new AuthService(userService, passwordEncoder, tokenService);
+		authService = new AuthService(userService, passwordEncoder, tokenService, refreshTokenService);
 	}
 
 	// ------------------------------------------------------------------ register
@@ -112,12 +121,16 @@ class AuthServiceTest {
 		when(passwordEncoder.matches("correct-horse-42", "hash")).thenReturn(true);
 		when(tokenService.issueAccessToken(id)).thenReturn("signed.jwt.value");
 		when(tokenService.accessTokenTtl()).thenReturn(Duration.ofMinutes(15));
+		Instant refreshExpiry = Instant.parse("2026-12-26T08:00:00Z");
+		when(refreshTokenService.issueForLogin(id, "Pixel 8")).thenReturn(new IssuedRefreshToken("raw-refresh", refreshExpiry));
 
-		TokenResponse response = authService.login(new LoginRequest("ravi@mail.com", "correct-horse-42"));
+		TokenResponse response = authService.login(new LoginRequest("ravi@mail.com", "correct-horse-42", "Pixel 8"));
 
 		assertThat(response.accessToken()).isEqualTo("signed.jwt.value");
 		assertThat(response.tokenType()).isEqualTo("Bearer");
 		assertThat(response.expiresIn()).isEqualTo(900);
+		assertThat(response.refreshToken()).isEqualTo("raw-refresh");
+		assertThat(response.refreshTokenExpiresAt()).isEqualTo(refreshExpiry);
 	}
 
 	@Test
@@ -137,7 +150,7 @@ class AuthServiceTest {
 
 		// The expensive check still ran, so this answer takes as long as a wrong password.
 		verify(passwordEncoder).matches(TIMING_INPUT, DUMMY_HASH);
-		verifyNoInteractions(tokenService);
+		verifyNoInteractions(tokenService, refreshTokenService);
 	}
 
 	@Test
@@ -148,7 +161,7 @@ class AuthServiceTest {
 
 		assertInvalidCredentials(() -> authService.login(new LoginRequest("ravi@mail.com", "wrong-password")));
 
-		verifyNoInteractions(tokenService);
+		verifyNoInteractions(tokenService, refreshTokenService);
 	}
 
 	@Test
@@ -160,7 +173,7 @@ class AuthServiceTest {
 		assertInvalidCredentials(() -> authService.login(new LoginRequest("google@mail.com", "any-password")));
 
 		verify(passwordEncoder).matches(TIMING_INPUT, DUMMY_HASH);
-		verifyNoInteractions(tokenService);
+		verifyNoInteractions(tokenService, refreshTokenService);
 	}
 
 	@Test
@@ -174,7 +187,7 @@ class AuthServiceTest {
 		// Never handed to BCrypt (it can't take over 72 bytes); the dummy check runs instead.
 		verify(passwordEncoder, never()).matches(emojiPassword, "hash");
 		verify(passwordEncoder).matches(TIMING_INPUT, DUMMY_HASH);
-		verifyNoInteractions(tokenService);
+		verifyNoInteractions(tokenService, refreshTokenService);
 	}
 
 	private static void assertInvalidCredentials(Runnable login) {
@@ -183,6 +196,48 @@ class AuthServiceTest {
 			.hasMessage("Email or password is incorrect.")
 			.extracting(ex -> ((ApiException) ex).getErrorCode())
 			.isEqualTo(ErrorCode.INVALID_CREDENTIALS);
+	}
+
+	// ------------------------------------------------------------------- refresh
+
+	@Test
+	void refresh_rotated_returnsNewPair() {
+		UUID id = UUID.randomUUID();
+		Instant expiry = Instant.parse("2026-12-26T08:00:00Z");
+		when(refreshTokenService.rotate("old-raw"))
+			.thenReturn(new RotationResult.Rotated(id, new IssuedRefreshToken("new-raw", expiry)));
+		when(tokenService.issueAccessToken(id)).thenReturn("new.jwt");
+		when(tokenService.accessTokenTtl()).thenReturn(Duration.ofMinutes(15));
+
+		TokenResponse response = authService.refresh(new RefreshTokenRequest("old-raw"));
+
+		assertThat(response.accessToken()).isEqualTo("new.jwt");
+		assertThat(response.refreshToken()).isEqualTo("new-raw");
+	}
+
+	@ParameterizedTest
+	@EnumSource(RotationResult.Reason.class)
+	void refresh_rejected_throwsInvalidRefreshToken_andIssuesNoAccessToken(RotationResult.Reason reason) {
+		when(refreshTokenService.rotate("bad")).thenReturn(new RotationResult.Rejected(reason));
+
+		assertThatThrownBy(() -> authService.refresh(new RefreshTokenRequest("bad")))
+			.isInstanceOf(UnauthorizedException.class)
+			.extracting(ex -> ((UnauthorizedException) ex).getErrorCode())
+			.isEqualTo(ErrorCode.INVALID_REFRESH_TOKEN);
+		verifyNoInteractions(tokenService);
+	}
+
+	@Test
+	void logout_revokesFamilyOfGivenToken() {
+		authService.logout(new RefreshTokenRequest("raw"));
+		verify(refreshTokenService).revokeFamilyOf("raw");
+	}
+
+	@Test
+	void logoutEverywhere_revokesAllForUser() {
+		UUID id = UUID.randomUUID();
+		authService.logoutEverywhere(id);
+		verify(refreshTokenService).revokeAllForUser(id);
 	}
 
 }

@@ -22,15 +22,26 @@ public record LoginRequest(
 
 		@NotBlank(message = "Password is required.")
 		@Schema(example = "correct-horse-42", format = "password")
-		String password) {
+		String password,
+
+		@Size(max = 100, message = "Device label must be at most 100 characters.")
+		@Schema(description = "Optional name of this device, shown later in the device list.", example = "Pixel 8",
+				nullable = true)
+		String deviceLabel) {
 
 	public LoginRequest {
 		email = email == null ? null : email.strip();
+		deviceLabel = deviceLabel == null || deviceLabel.isBlank() ? null : deviceLabel.strip();
+	}
+
+	/** Login without a device label (used by tests and older app builds). */
+	public LoginRequest(String email, String password) {
+		this(email, password, null);
 	}
 
 	@Override
 	public String toString() {
-		return "LoginRequest[email=***, password=***]";
+		return "LoginRequest[email=***, password=***, deviceLabel=" + deviceLabel + "]";
 	}
 
 }
